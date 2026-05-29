@@ -1,36 +1,37 @@
 <!DOCTYPE html>
 <!--
-  UT NDT Training Simulator — v65
-  Per user 2026-05-28 EDT "同意全部 (18 條)" — ships v64 six-lens self-play
-  candidates FO-GF (student / professor / NDT expert / coder / dev experience /
+  UT NDT Training Simulator — v66
+  Per user 2026-05-29 EDT "同意全部 (A 區 18 條)" — ships v65 six-lens self-play
+  candidates GG-GX (student / professor / NDT expert / coder / dev experience /
   UI polish — 3 each = 18 items in one ship).
 
-  v65 changeset (CLAUDE.md §168-§185):
+  v66 changeset (CLAUDE.md §186-§203):
     Student lens
-    + §168 FO — Settings pulse auto-dismisses after 6 s (no toggle needed)
-    + §169 FP — L2/L3 (?) chip taps out the 3-state cycle (mobile, no hover)
-    + §170 FQ — Strict toast concrete "spot centre" wording; dwell 3500→2800
+    + §186 GG — Strict / Roof (?) chips (consistency with the L2/L3 chip)
+    + §187 GH — Strict button shows inline TOL value (≤10 mm / ≤5 mm ∝Φ)
+    + §188 GI — Settings backdrop faint dim (rgba 0,0,0,0.12) so modal is perceivable
     Professor lens
-    + §171 FR — Sparkline best/avg lines named (— best / — avg) + alpha 0.70/0.65
-    + §172 FS — Delta sub-chips get axis title + emoji (🎯 hit / ⏱ elapsed)
-    + §173 FT — Manual-override toast says how to release the lock; dwell 1800→2400
+    + §189 GJ — Sparkline fixed pass line at hit-rate 0.8 ("— pass ≥80%")
+    + §190 GK — Elapsed delta chips say slower / faster (not just +/−)
+    + §191 GL — Persistent HUD "attempts: N · avg X%" chip (from round 1)
     NDT expert lens
-    + §174 FU — Roof disclaimer bound to its row with hr + tinted bg
-    + §175 FV — _mazeLastDir starts null; persists last good direction
-    + §176 FW — Reveal toast surfaces the non-strict r·2.5 TOL cap when it bites
+    + §192 GM — Stationary probe ⇒ L2/L3 sample straight down (shift 0), not laterally
+    + §193 GN — Persistent popup note explains the non-strict min(10, Φ×2.5) cap
+    + §194 GO — 6 dB sizing warns when reflector < beam width (beam-width, not flaw)
     Coder lens
-    + §177 FX — mazeSpatialGrid Map invariant documented + smoke-asserted
-    + §178 FY — maze.state Proxy set-trap warns on unknown keys (vs silent seal)
-    + §179 FZ — Smoke tests assert actual _formatHitRateDelta output (+ / − / 0)
+    + §195 GP — maze.state write-passthrough smoke assert + hot-path bare-globals note
+    + §196 GQ — Rule-code audit result cached (no per-run innerHTML re-serialise)
+    + §197 GR — safeSSGet documents its string-only (no-JSON) contract
     Dev-experience lens
-    + §180 GA — Smoke re-run gated on tab visibility + visibilitychange re-run
-    + §181 GB — Rule-code audit uses word-boundary regex (no false +/− matches)
-    + §182 GC — safeLSGet warns on unspecified mode (dev); callsites made explicit
+    + §198 GS — ?smoke=verbose logs every assertion (pass/fail + info)
+    + §199 GT — Formatter smoke asserts test structure, not exact strings
+    + §200 GU — Smoke asserts __VERSION_DELTA__.ruleCodes.length === 18
     UI polish lens
-    + §183 GD — Settings popup max-width + backdrop outside-click close
-    + §184 GE — .mz-diff-btn shape icons (◇⊙☐△ → ◆⊚■▲) for colour-blind users
-    + §185 GF — Sparkline scale labels moved to a left gutter (no polyline overlap)
+    + §201 GV — Difficulty icon only on the active button; FM/GE variant-class fix
+    + §202 GW — Sparkline row wraps + shrinks caption on < 400 px (no overflow)
+    + §203 GX — Popup open lifts canvas above backdrop so probe drag still works
 
+  Previous v65 changeset (CLAUDE.md §168-§185): FO-GF — see CLAUDE.md history.
   Previous v64 changeset (CLAUDE.md §150-§167): EW-FN — see CLAUDE.md history.
 
   Previous v63 changeset (CLAUDE.md §132-§149):
@@ -267,7 +268,7 @@
 <meta charset="UTF-8">
 <!-- v50 α5 — removed user-scalable=no + maximum-scale to allow mobile pinch zoom -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>UT NDT Training Simulator — v65</title>
+<title>UT NDT Training Simulator — v66</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -329,12 +330,17 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .maze-controls .mz-settings[open] > summary { border-style:solid; color:var(--text); }
 .maze-controls .mz-settings-body { display:flex; gap:6px; flex-wrap:wrap; padding:8px 10px; margin-top:4px;
   border:1px solid var(--border); border-radius:6px; background:var(--surface);
-  position:absolute; top:100%; left:0; min-width:280px; box-shadow:0 4px 12px rgba(0,0,0,0.4); z-index:50;
+  /* v66 §203 GX — z-index 50 → 60 so the popup body stays above the (now raised) canvas. */
+  position:absolute; top:100%; left:0; min-width:280px; box-shadow:0 4px 12px rgba(0,0,0,0.4); z-index:60;
   /* v65 §183 GD — never overflow a < 320 px viewport. */
   max-width:calc(100vw - 24px); }
-/* v65 §183 GD — transparent full-screen backdrop captures outside taps/clicks to collapse the popup. */
-.mz-settings-backdrop { position:fixed; inset:0; z-index:49; background:transparent; display:none; }
+/* v65 §183 GD — full-screen backdrop captures outside taps/clicks to collapse the popup.
+   v66 §188 GI — faint dim (was transparent) so the modal state is perceivable. */
+.mz-settings-backdrop { position:fixed; inset:0; z-index:49; background:rgba(0,0,0,0.12); display:none; }
 .mz-settings-backdrop.visible { display:block; }
+/* v66 §203 GX — while the popup is open, raise the scan canvas above the backdrop (z-49) so
+   the student can still drag the probe; the backdrop only catches non-canvas outside clicks. */
+#scan-canvas.mz-canvas-raised { position:relative; z-index:50; }
 /* v64 §150 EW — first-visit pulse to call attention to the hidden L2/L3 / Strict / Roof toggles. */
 @keyframes mz-settings-pulse {
   0%   { box-shadow:0 0 0 0 rgba(255,165,0,0.55); }
@@ -349,8 +355,10 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .maze-controls .mz-diff-btn--toggle.active { border-color:var(--orange); background:rgba(255,165,0,0.12); color:var(--orange); }
 .maze-controls .mz-diff-btn--roof.active   { border-color:#9eb8d3; background:rgba(158,184,211,0.12); color:#9eb8d3; }
 /* v65 §184 GE — icon prefix gives a second (shape) channel on top of FM hue variants, so
-   colour-blind users can still tell diff / probe / toggle / roof rows apart. Active = filled glyph. */
-.maze-controls .mz-diff-btn--diff::before   { content:'◇ '; }
+   colour-blind users can still tell diff / probe / toggle / roof rows apart. Active = filled glyph.
+   v66 §201 GV — the Difficulty row has 4 same-variant buttons, so an outline ◇ on every one is
+   pure noise; only the ACTIVE diff button shows a filled ◆ now (no outline icon on the rest).
+   probe / toggle / roof keep both states (their rows have 2-3 buttons → the icon still helps). */
 .maze-controls .mz-diff-btn--probe::before  { content:'⊙ '; }
 .maze-controls .mz-diff-btn--toggle::before { content:'☐ '; }
 .maze-controls .mz-diff-btn--roof::before   { content:'△ '; }
@@ -376,6 +384,14 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .mz-stat--delta-pos { color:#ffb74d; }
 .mz-stat--delta-neg { color:#7ee29a; }
 .mz-stat-delta { margin-left:4px; font-size:9px; }
+/* v66 §202 GW — the sparkline row (label + widened SVG + best/avg/pass caption) is a flex row;
+   on < 400 px screens let it wrap and shrink the caption so the gutter-widened SVG (§185 GF)
+   never pushes the caption off-screen. */
+.mz-sparkline-row { display:flex; align-items:center; gap:6px; margin:2px 0 6px; flex-wrap:nowrap; }
+@media (max-width:400px) {
+  .mz-sparkline-row { flex-wrap:wrap; }
+  .mz-sparkline-row .mz-spark-caption { font-size:8px; }
+}
 /* Skew buttons */
 .skew-bar { display:none; gap:5px; margin-bottom:10px; }
 .skew-bar.visible { display:flex; }
@@ -646,7 +662,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
 <body>
 
 <div class="header">
-  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v65</span></h1>
+  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v66</span></h1>
   <span class="badge">Pulse-Echo</span>
   <span class="badge" id="freq-badge">5 MHz</span>
   <span class="badge ok" id="ex-badge">Exercise 1</span>
@@ -713,8 +729,14 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
         <span onclick="showToast('L2/L3 multi-bounce cycle: follow-mode → ON·lock → OFF·lock → follow-mode. Tap the L2/L3 button to advance one step. (tap here to see this again)', 4000)" title="What does the L2/L3 button cycle through?" style="cursor:pointer;font-size:8px;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:1px 5px;margin-left:3px;user-select:none;">?</span>
       </div>
       <div class="mz-group">
-        <button class="mz-diff-btn mz-diff-btn--toggle" id="mz-strict-toggle" onclick="toggleMazeStrict()" title="Strict mode: marker hit tolerance tightens 10 mm → 5 mm (per-spot ∝Φ). Real corrosion mapping (ASNT Level 2) requires this alignment.">🎯 Strict OFF</button>
+        <!-- v66 §187 GH — inline TOL value keeps the tolerance visible after the toast dismisses. -->
+        <button class="mz-diff-btn mz-diff-btn--toggle" id="mz-strict-toggle" onclick="toggleMazeStrict()" title="Strict mode: marker hit tolerance tightens 10 mm → 5 mm (per-spot ∝Φ). Real corrosion mapping (ASNT Level 2) requires this alignment.">🎯 Strict OFF · ≤10 mm</button>
+        <!-- v66 §186 GG — (?) chip for the Strict toggle, matching the L2/L3 chip pattern. -->
+        <span onclick="showToast('Strict mode controls the marker hit tolerance — how close your marker must sit to a thin spot to count as a hit. OFF: ≤10 mm (capped by spot Φ × 2.5). ON: ≤5 mm, tightened proportionally by spot size (∝Φ) per ASNT Level 2.', 4200)" title="What does the Strict toggle do?" style="cursor:pointer;font-size:8px;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:1px 5px;margin-left:3px;user-select:none;">?</span>
       </div>
+      <!-- v66 §193 GN — persistent teaching note: the non-strict TOL cap (min 10 mm, Φ×2.5) is
+           otherwise invisible because every current difficulty (min Φ 8 mm) already caps at 10 mm. -->
+      <div style="flex-basis:100%; font-size:9px; color:var(--muted); font-style:italic; padding:2px 2px 0;">Non-strict TOL = min(10 mm, spot Φ × 2.5) — caps forgiveness on small spots.</div>
       <!-- v63 §138 EK — Dual roof-angle preset (visible only when Dual probe selected).
            v64 §156 FC — bias values include cell-pad delay; pure-geometry V-path is ~½ of this. -->
       <div class="mz-group" id="mz-roof-group" style="display:none;">
@@ -722,6 +744,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
         <button class="mz-diff-btn mz-diff-btn--roof"        id="mz-roof-5"  onclick="setMazeDualRoof(5)"  title="5° roof — SE-series dual; bias +1.1 % (incl. cell-pad delay). Source: Olympus Panametrics D790 handbook table 4-1. Pure-geometry V-path ≈ +0.38 %.">5°</button>
         <button class="mz-diff-btn mz-diff-btn--roof active" id="mz-roof-7"  onclick="setMazeDualRoof(7)"  title="7° roof — standard dual; bias +2.0 % (incl. cell-pad delay). Source: Olympus Panametrics D790 handbook table 4-1. Pure-geometry V-path ≈ +0.75 %.">7°</button>
         <button class="mz-diff-btn mz-diff-btn--roof"        id="mz-roof-10" onclick="setMazeDualRoof(10)" title="10° roof — SDR-series dual; bias +4.0 % (incl. cell-pad delay). Source: Olympus Panametrics D790 handbook table 4-1. Pure-geometry V-path ≈ +1.52 %.">10°</button>
+        <!-- v66 §186 GG — (?) chip for the Roof selector, matching the L2/L3 + Strict chips. -->
+        <span onclick="showToast('Dual-element probes have two crystals tilted slightly inward (the roof angle). The beam travels a shallow V inside the plate, so the back-wall echo reads a little deeper than the true thickness. A bigger roof angle = bigger bias. Swap probe type ⇒ re-calibrate.', 4200)" title="What does the Roof angle do?" style="cursor:pointer;font-size:8px;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:1px 5px;margin-left:3px;user-select:none;">?</span>
       </div>
       <!-- v65 §174 FU — hr + tinted bg visually binds this disclaimer to the Roof row above (students were reading it as part of the Strict toggle). -->
       <hr style="flex-basis:100%; border:none; border-top:1px dashed rgba(255,255,255,0.15); margin:6px 0 0;">
@@ -742,8 +766,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
     <span class="mz-stat mz-stat--score" id="mz-score-stat" style="display:none;">🎯 <span id="mz-score">—</span></span>
     <!-- v60 §108 DG — best score for current difficulty -->
     <span class="mz-stat mz-stat--best" id="mz-best-stat"  style="display:none;">🏆 best <span id="mz-best">—</span></span>
-    <!-- v61 §119 DR — running average for current difficulty (shown once n ≥ 2) -->
-    <span class="mz-stat mz-stat--avg"  id="mz-avg-stat"   style="display:none;">📊 avg <span id="mz-avg">—</span></span>
+    <!-- v61 §119 DR — running average for current difficulty.
+         v66 §191 GL — now a persistent "attempts · avg" chip (shown from round 1) so the
+         student can read their session learning curve without expanding the Findings panel. -->
+    <span class="mz-stat mz-stat--avg"  id="mz-avg-stat"   style="display:none;">📊 <span id="mz-avg">—</span></span>
     <!-- v62 §129 EB — STRICT chip visible only when strict mode on. -->
     <span class="mz-stat mz-stat--strict" id="mz-strict-stat" style="display:none;">STRICT</span>
   </div>
@@ -1124,6 +1150,10 @@ function safeLSSet(key, value){
     else localStorage.setItem(key, String(value));
   } catch(e) {}
 }
+// v66 §197 GR — sessionStorage values are ALWAYS strings here, by design — there is no JSON
+// path (unlike safeLSGet's mode param). All current SS keys store flags/ids ('1', a tab name,
+// etc.). If a future caller needs structured data, add an explicit mode like safeLSGet rather
+// than auto-detecting, so the string-only contract stays obvious.
 function safeSSGet(key, fallback){
   try { var v = sessionStorage.getItem(key); return (v === null || v === undefined) ? fallback : v; }
   catch(e){ return fallback; }
@@ -1277,6 +1307,12 @@ function _mazeStrictTolFor(spot){
 }
 // Back-compat scalar (no spot context — falls back to nominal 5 mm in strict).
 function _mazeStrictTol(){ return mazeStrictMode ? 5 : 10; }
+// v66 §187 GH — single source for the Strict button label so the inline TOL value
+// stays consistent across HTML default, toggle, and EX-entry sync. ≤ values are the
+// upper bounds (strict is per-spot ∝Φ; non-strict caps at min(10, Φ×2.5)).
+function _strictBtnLabel(){
+  return mazeStrictMode ? '🎯 Strict ON · ≤5 mm ∝Φ' : '🎯 Strict OFF · ≤10 mm';
+}
 function toggleMazeMultiBounce(){
   // Cycle: follow-mode → forced ON → forced OFF → follow-mode.
   if (mazeMultiBounceOn === null) mazeMultiBounceOn = true;
@@ -1312,7 +1348,7 @@ function toggleMazeStrict(){
   safeLSSet(LS_KEYS.MAZE_STRICT, mazeStrictMode ? 'on' : 'off');
   var btn = document.getElementById('mz-strict-toggle');
   if (btn) {
-    btn.textContent = '🎯 Strict ' + (mazeStrictMode ? 'ON' : 'OFF');
+    btn.textContent = _strictBtnLabel(); // v66 §187 GH
     btn.className = 'mz-diff-btn mz-diff-btn--toggle' + (mazeStrictMode ? ' active' : '');
   }
   var chip = document.getElementById('mz-strict-stat');
@@ -1335,7 +1371,8 @@ function setMazeDualRoof(angle){
   safeLSSet(LS_KEYS.MAZE_DUAL_ROOF, String(angle));
   ['5','7','10'].forEach(function(a){
     var el = document.getElementById('mz-roof-'+a);
-    if (el) el.className = 'mz-diff-btn' + (String(angle)===a?' active':'');
+    // v66 §201 GV — preserve the --roof variant class (was stripped, killing the FM hue + GE icon).
+    if (el) el.className = 'mz-diff-btn mz-diff-btn--roof' + (String(angle)===a?' active':'');
   });
   showToast('Dual roof angle ' + angle + '° — bias ' + ((_dualVpathBias()-1)*100).toFixed(1) + '%.', 1800);
 }
@@ -1401,7 +1438,9 @@ function setMazeDifficulty(level){
   // v60 §110 DI — include 'general' in active-class toggle.
   ['easy','medium','hard','general'].forEach(function(d){
     var el = document.getElementById('mz-diff-'+d);
-    if (el) el.className = 'mz-diff-btn' + (d===level?' active':'');
+    // v66 §201 GV — preserve the --diff variant class (was stripped, killing the FM hue +
+    // the GE active ◆ icon after the first click).
+    if (el) el.className = 'mz-diff-btn mz-diff-btn--diff' + (d===level?' active':'');
   });
   generateMaze();
   var ss = document.getElementById('mz-score-stat'); if (ss) ss.style.display = 'none';
@@ -1426,9 +1465,10 @@ function _refreshMazeBestChip(){
     }
   }
   if (avgChip && avgVal) {
-    if (best && best.rounds && best.rounds > 1) {
+    // v66 §191 GL — persistent attempts/avg chip from the first recorded round (was n ≥ 2).
+    if (best && best.rounds && best.rounds >= 1) {
       avgChip.style.display = 'inline';
-      avgVal.textContent = (best.avgHitRate*100).toFixed(0)+'% (n='+best.rounds+')';
+      avgVal.textContent = 'attempts: '+best.rounds+' · avg '+(best.avgHitRate*100).toFixed(0)+'%';
     } else {
       avgChip.style.display = 'none';
     }
@@ -1440,7 +1480,8 @@ function setMazeProbeType(t){
   mazeProbeType = t;
   ['single','dual'].forEach(function(k){
     var el = document.getElementById('mz-probe-'+k);
-    if (el) el.className = 'mz-diff-btn' + (k===t?' active':'');
+    // v66 §201 GV — preserve the --probe variant class (was stripped, killing the FM purple hue + GE icon).
+    if (el) el.className = 'mz-diff-btn mz-diff-btn--probe' + (k===t?' active':'');
   });
   // v63 §141 EN — footprint changes ⇒ spatial-grid pad changes, so rebuild.
   if (mazeSpots && mazeSpots.length) _rebuildMazeSpatialGrid();
@@ -1544,6 +1585,17 @@ function _mazeTrailDirection(){
   if (len < 0.5) return fallback;
   _mazeLastDir = { dx: dx / len, dy: dy / len };
   return _mazeLastDir;
+}
+// v66 §192 GM — is the probe actually moving this frame? When it sits still on a spot,
+// real multi-bounce echoes travel straight down the plate thickness (V-path stays under
+// the probe), not laterally along the last drag direction. So L2/L3 should sample the same
+// (x,y) with zero shift when stationary, and only wander along the trail while moving.
+function _mazeProbeMoving(){
+  if (!mazeTrail || mazeTrail.length < 2) return false;
+  var a = mazeTrail[mazeTrail.length - 2];
+  var b = mazeTrail[mazeTrail.length - 1];
+  var dx = b.x_mm - a.x_mm, dy = b.y_mm - a.y_mm;
+  return Math.sqrt(dx*dx + dy*dy) >= 0.5;
 }
 // Back-compat helper for callers that only want the scalar thickness.
 function _mazeThicknessAt(p) { return _mazeProbeFootprint(p).thickness; }
@@ -1677,7 +1729,10 @@ function _formatElapsedDelta(score, prev){
   var dEl   = score.elapsed - prev.elapsed;
   var dElPct = prev.elapsed > 0 ? (dEl / prev.elapsed * 100) : 0;
   var dElPctStr = (dElPct > 0 ? '+' : (dElPct < 0 ? '−' : '±')) + Math.abs(dElPct).toFixed(0) + '%';
-  return (dEl > 0 ? '+' : (dEl < 0 ? '−' : '±')) + Math.abs(dEl) + 's (' + dElPctStr + ')';
+  // v66 §190 GK — explicit slower/faster word. For elapsed time, "+" means worse (slower),
+  // opposite to hit-rate where "+" is better — so the sign alone confuses students.
+  var dir = dEl > 0 ? ', slower' : (dEl < 0 ? ', faster' : '');
+  return (dEl > 0 ? '+' : (dEl < 0 ? '−' : '±')) + Math.abs(dEl) + 's (' + dElPctStr + dir + ')';
 }
 function _renderRevealedScore(score, prevForDelta){
   var minStr = Math.floor(score.elapsed/60)+':'+String(score.elapsed%60).padStart(2,'0');
@@ -1752,7 +1807,9 @@ function _maybeUpdateMazeTimer(){
       var sign = d > 0 ? '+' : (d < 0 ? '−' : '±');
       var pct = (d / best.elapsed * 100);
       var pctStr = (d > 0 ? '+' : (d < 0 ? '−' : '±')) + Math.abs(pct).toFixed(0) + '%';
-      deltaEl.textContent = '('+sign+Math.abs(d)+'s '+pctStr+' vs best)';
+      // v66 §190 GK — slower/faster word so the running timer delta isn't ambiguous either.
+      var dir = d > 0 ? ' slower' : (d < 0 ? ' faster' : '');
+      deltaEl.textContent = '('+sign+Math.abs(d)+'s '+pctStr+' vs best'+dir+')';
       deltaEl.className = 'mz-stat-delta ' + (d <= 0 ? 'mz-stat--delta-neg' : 'mz-stat--delta-pos');
     } else {
       deltaEl.textContent = '';
@@ -1761,6 +1818,12 @@ function _maybeUpdateMazeTimer(){
   }
 }
 // Maze plate rendering: top-down view of 250×250 mm steel sheet
+// v66 §195 GP — PERF: this 60 fps hot path (and drawMazeAscan) reads the BARE globals
+// (mazeSpots, mazeRevealed, …) directly — NOT maze.state.mazeSpots. The maze.state Proxy
+// (§178 FY) forwards through an accessor to the same globals, so going via maze.state would
+// add two indirections per access inside the draw loop. Keep hot-path reads on the bare
+// globals; use maze.state only for namespaced/external access. (Write-passthrough is
+// smoke-asserted in runSmokeTests.)
 function drawMazeScan(ctx) {
   // Grid background
   ctx.fillStyle = '#1a2230';
@@ -2073,15 +2136,19 @@ function drawMazeAscan(ctx, W, H) {
     // v63 §139 EL — shift along probe's trail direction (anti-direction = trailing
     // edge wander). Static probe ⇒ fallback +X (matches v62 §131 ED behavior).
     var dirVec = _mazeTrailDirection();
+    // v66 §192 GM — when the probe is stationary the V-path stays straight under it, so
+    // L2/L3 sample the same (x,y) with zero shift. Only a moving probe wanders laterally.
+    var moving = _mazeProbeMoving();
     bounceCfg.forEach(function(cfg){
       var bx_n = bwX_normal * cfg.leg;
       var bx_t = bwX_thin   * cfg.leg;
       var halfWB = halfW * 0.7;
-      var shiftMm = cfg.shift * pf.thickness;
-      // Trail-direction-aware shift (CLAUDE.md §139 EL).
-      var pShift = { x_mm: Math.max(0, Math.min(MAZE_PLATE_MM, p.x_mm + dirVec.dx * shiftMm)),
+      var shiftMm = moving ? cfg.shift * pf.thickness : 0;
+      // Trail-direction-aware shift while moving (CLAUDE.md §139 EL); straight-down when still (§192 GM).
+      var pShift = (shiftMm === 0) ? p
+                 : { x_mm: Math.max(0, Math.min(MAZE_PLATE_MM, p.x_mm + dirVec.dx * shiftMm)),
                      y_mm: Math.max(0, Math.min(MAZE_PLATE_MM, p.y_mm + dirVec.dy * shiftMm)) };
-      var pfL    = _mazeProbeFootprint(pShift);
+      var pfL    = (shiftMm === 0) ? pf : _mazeProbeFootprint(pShift);
       var ampMax_leg = ampMax * cfg.mult;
       var a_n = (1 - pfL.thinAmount) * ampMax_leg;
       var a_t = pfL.thinAmount        * ampMax_leg;
@@ -4421,7 +4488,7 @@ function setExercise(ex) {
     if (typeof _refreshMazeMultiBounceBtn === 'function') _refreshMazeMultiBounceBtn();
     var strictBtn = document.getElementById('mz-strict-toggle');
     if (strictBtn) {
-      strictBtn.textContent = '🎯 Strict ' + (mazeStrictMode ? 'ON' : 'OFF');
+      strictBtn.textContent = _strictBtnLabel(); // v66 §187 GH
       strictBtn.className = 'mz-diff-btn mz-diff-btn--toggle' + (mazeStrictMode ? ' active' : '');
     }
     var strictChip = document.getElementById('mz-strict-stat');
@@ -4959,7 +5026,7 @@ function exportScanPlan(){
   md += '- **Display mode:** ' + (advancedMode ? 'ADVANCED' : 'BASIC') + ' / ' + learnMode.toUpperCase() + '\n';
   md += '- **Probe position X:** ' + Math.round((txX-MAT_X)/MAT_W*240) + ' mm\n';
   md += '- **Sound-path range:** 0..200 mm\n';
-  md += '- **Generated by:** UT NDT Trainer v65\n';
+  md += '- **Generated by:** UT NDT Trainer v66\n';
   // v59 §99 CX — append Corrosion Maze score if a round has been revealed.
   if (mazeScore) {
     var hrPct = (mazeScore.hitRate*100).toFixed(0);
@@ -5169,6 +5236,33 @@ function drawDacCapture(ctx, W, H, baseline, displayH, ps){
 //   3rd click (after dragging probe right to −6 dB): record right edge X → compute length
 //   4th click: reset
 var sizingState = { mode:'idle', refAmp:0, leftX:null, rightX:null, lengthMm:null };
+// v66 §194 GO — sound path of the dominant defect in the active EX (same logic dgsSize uses),
+// so the sizing tool can estimate the beam diameter at that depth.
+function _currentDefectSP(){
+  var sp_mm = 50; // fallback
+  if (exercise === 'penetration') {
+    var ps = getPlanarSignal();
+    var best = ['shallow','ref','deep','far'].reduce(function(a,k){
+      return (ps[k].defAmp > (a ? a.defAmp : 0)) ? ps[k] : a;
+    }, null);
+    if (best) sp_mm = best.ry * MAT_THICKNESS_MM;
+  } else if (exercise === 'weld') {
+    var ws = getWeldCrackSignal();
+    if (ws.amp > 0.05) sp_mm = pxToMm(ws.soundPath || 0);
+  }
+  return sp_mm;
+}
+// v66 §194 GO — estimated −6 dB beam diameter (mm) at a given sound path. Uses the same
+// near-field / half-divergence physics as drawStandardBeam (CLAUDE.md §13): in the near
+// field the beam is ~crystal-diameter wide; past N it diverges linearly at sinθ = 1.08·λ/D.
+function _estBeamWidthMm(sp_mm){
+  var D_mm   = freq === 5 ? 12 : 10;
+  var lambda = materialC / freq;
+  var N_mm   = (D_mm * D_mm * freq) / (4 * materialC);
+  var sinT   = Math.min(0.98, 1.08 * lambda / D_mm);
+  var theta  = Math.asin(sinT);
+  return (sp_mm <= N_mm) ? D_mm : D_mm + 2 * (sp_mm - N_mm) * Math.tan(theta);
+}
 function sizingClick(){
   var btn = document.getElementById('sizing-btn');
   if (sizingState.mode === 'idle') {
@@ -5195,7 +5289,15 @@ function sizingClick(){
     sizingState.mode = 'done';
     btn.textContent = '↺ Reset sizing';
     btn.style.borderColor = 'var(--green)'; btn.style.color = 'var(--green)';
-    showToast('Estimated defect length: '+sizingState.lengthMm.toFixed(1)+' mm (6 dB drop method)', 5000);
+    // v66 §194 GO — when the measured length is below the beam width, the 6 dB drop is
+    // tracking the beam, not the flaw. Warn the student (ASNT Level 2 limit; Vault
+    // [[ut-6db-drop-sizing]]) and point at tip-diffraction / DGS for small reflectors.
+    var beamW = _estBeamWidthMm(_currentDefectSP());
+    var msg = 'Estimated defect length: '+sizingState.lengthMm.toFixed(1)+' mm (6 dB drop method)';
+    if (sizingState.lengthMm < beamW) {
+      msg += ' · ⚠ reflector smaller than the ~'+beamW.toFixed(0)+' mm beam — 6 dB drop here measures BEAM WIDTH, not flaw size. Use tip-diffraction / DGS for small reflectors.';
+    }
+    showToast(msg, sizingState.lengthMm < beamW ? 6800 : 5000);
   } else {
     sizingState = { mode:'idle', refAmp:0, leftX:null, rightX:null, lengthMm:null };
     btn.textContent = '📏 Size −6 dB';
@@ -5369,6 +5471,12 @@ function _renderMazeSparkline(entries){
   var midY = (H / 2).toFixed(1);
   var midline = '<line x1="'+pad+'" y1="'+midY+'" x2="'+(W-pad)+'" y2="'+midY+
     '" stroke="rgba(255,255,255,0.10)" stroke-width="0.6" stroke-dasharray="2 2"><title>midline (hit-rate 50 %)</title></line>';
+  // v66 §189 GJ — fixed pedagogical pass line at hit-rate 0.8. Unlike best/avg (relative to the
+  // student's own history) this is an ABSOLUTE target, so even a first-ever sparkline has something
+  // to read against. Shares this SVG render with the best/avg reference lines.
+  var passY = (pad + (1 - 0.8) * (H - 2*pad)).toFixed(1);
+  var passLine = '<line x1="'+pad+'" y1="'+passY+'" x2="'+(W-pad)+'" y2="'+passY+
+    '" stroke="rgba(63,225,120,0.75)" stroke-width="0.6" stroke-dasharray="1 1.5"><title>pass line (hit-rate 80 %)</title></line>';
   // EZ — best/avg reference lines using the persisted mazeBestScore for this difficulty.
   var bestObj = (typeof mazeBestScore !== 'undefined') ? mazeBestScore[diff] : null;
   var refLines = '';
@@ -5397,7 +5505,8 @@ function _renderMazeSparkline(entries){
     '<circle cx="'+pts[0].split(',')[0]+'" cy="'+pts[0].split(',')[1]+'" r="1.4" fill="var(--cyan,#00bcd4)"/>'+
     '<circle cx="'+pts[pts.length-1].split(',')[0]+'" cy="'+pts[pts.length-1].split(',')[1]+'" r="1.4" fill="var(--cyan,#00bcd4)"/>';
   // v65 §171 FR — name the reference lines so students know which dashed line is best vs avg.
-  var refCaption = '';
+  // v66 §189 GJ — also name the fixed pass line (always shown).
+  var refCaption = '<span style="font-size:8px;color:rgba(63,225,120,0.95);">— pass ≥80%</span>';
   if (bestObj && typeof bestObj.hitRate === 'number') {
     refCaption += '<span style="font-size:8px;color:rgba(120,220,255,0.95);">— best</span>';
   }
@@ -5405,12 +5514,13 @@ function _renderMazeSparkline(entries){
     refCaption += '<span style="font-size:8px;color:rgba(255,200,120,0.95);">— avg</span>';
   }
   // v65 §185 GF — viewBox widened 12 units left so the gutter labels sit beside (not over) the chart.
-  return '<div style="display:flex;align-items:center;gap:6px;margin:2px 0 6px;">'+
+  // v66 §202 GW — container uses .mz-sparkline-row so it can wrap + shrink the caption on < 400 px.
+  return '<div class="mz-sparkline-row">'+
     '<span style="font-size:9px;color:var(--muted);">last '+last10.length+' '+diff+'</span>'+
     '<svg width="'+(W+12)+'" height="'+H+'" viewBox="-12 0 '+(W+12)+' '+H+'" style="background:rgba(255,255,255,0.04);border-radius:3px;overflow:visible;">'+
-      midline+refLines+scale+polyline+startEnd+
+      midline+passLine+refLines+scale+polyline+startEnd+
     '</svg>'+
-    '<span style="display:inline-flex;flex-direction:column;gap:1px;font-size:9px;color:var(--muted);"><span>higher = better</span>'+refCaption+'</span>'+
+    '<span class="mz-spark-caption" style="display:inline-flex;flex-direction:column;gap:1px;font-size:9px;color:var(--muted);"><span>higher = better</span>'+refCaption+'</span>'+
   '</div>';
 }
 function _renderFindingsHistory(){
@@ -5872,12 +5982,17 @@ if (savedMode === 'quiz') {
 // runSmokeTests audits that each code appears as a `§N XX —` comment in the page
 // HTML (proves the touch point is tagged); missing codes log a banner warning.
 var __VERSION_DELTA__ = Object.freeze({
-  version: 'v65',
-  ruleCodes: ['FO','FP','FQ','FR','FS','FT','FU','FV','FW','FX','FY','FZ','GA','GB','GC','GD','GE','GF']
+  version: 'v66',
+  ruleCodes: ['GG','GH','GI','GJ','GK','GL','GM','GN','GO','GP','GQ','GR','GS','GT','GU','GV','GW','GX']
 });
+// v66 §196 GQ — the rule-code audit serialises the whole document (innerHTML) and regex-tests
+// each code. The HTML never changes after load, so cache the result and skip the expensive
+// re-serialisation on dev-mode re-runs (§180 GA fires runSmokeTests every 30 s).
+var _ruleAuditCache = null;
 function runSmokeTests(){
   var checks = [];
-  function ok(name, cond){ checks.push({ name:name, pass: !!cond }); }
+  // v66 §198 GS — optional third arg `info` (expected/actual) surfaced by ?smoke=verbose.
+  function ok(name, cond, info){ checks.push({ name:name, pass: !!cond, info: info }); }
   ok('LS_KEYS frozen',          Object.isFrozen(LS_KEYS));
   ok('LS_KEYS.MAZE_BEST',       LS_KEYS.MAZE_BEST === 'ut_maze_best');
   ok('safeLSGet fallback',      safeLSGet('__no_such_key__', 42) === 42);
@@ -5912,20 +6027,52 @@ function runSmokeTests(){
   ok('spatial grid not null',   mazeSpatialGrid instanceof Map);
   ok('_formatHitRateDelta fn',  typeof _formatHitRateDelta === 'function');
   ok('_formatElapsedDelta fn',  typeof _formatElapsedDelta === 'function');
-  // v65 §179 FZ — assert actual output of the pure delta formatters (positive / negative / zero).
-  ok('_formatHitRateDelta +',   _formatHitRateDelta({hitRate:0.5},{hitRate:0.4}) === '+10%pts (40% → 50%)');
+  // v66 §199 GT — assert the STRUCTURE of the delta output, not an exact string. The old
+  // exact-match (incl. the '→' arrow) broke noisily if the arrow glyph ever changed; structural
+  // checks (leading sign, '%pts' token, two percentages) survive cosmetic formatting tweaks.
+  var _fhPos = _formatHitRateDelta({hitRate:0.5},{hitRate:0.4});
+  ok('_formatHitRateDelta + structure',
+     _fhPos.charAt(0) === '+' && _fhPos.indexOf('%pts') >= 0
+       && _fhPos.lastIndexOf('%') > _fhPos.indexOf('%pts'),  // a prev→now '%' exists after the %pts token
+     _fhPos);
   ok('_formatHitRateDelta -',   _formatHitRateDelta({hitRate:0.3},{hitRate:0.5}).charAt(0) === '-');
-  ok('_formatHitRateDelta 0',   _formatHitRateDelta({hitRate:0.5},{hitRate:0.5}) === '+0%pts (50% → 50%)');
+  var _fhZero = _formatHitRateDelta({hitRate:0.5},{hitRate:0.5});
+  ok('_formatHitRateDelta 0 structure',
+     _fhZero.charAt(0) === '+' && _fhZero.indexOf('0%pts') >= 0, _fhZero);
+  // v66 §190 GK — elapsed delta carries an explicit slower/faster word.
+  ok('_formatElapsedDelta slower', _formatElapsedDelta({elapsed:60},{elapsed:48}).indexOf('slower') >= 0);
+  ok('_formatElapsedDelta faster', _formatElapsedDelta({elapsed:40},{elapsed:50}).indexOf('faster') >= 0);
   ok('__VERSION_DELTA__ frozen', Object.isFrozen(__VERSION_DELTA__));
+  // v66 §200 GU — the hand-maintained ruleCodes list must match the 18 GG..GX rules (§186-203).
+  ok('ruleCodes count 18', __VERSION_DELTA__.ruleCodes.length === 18, __VERSION_DELTA__.ruleCodes.length);
+  // v66 §195 GP — writing a valid key via the maze.state Proxy still passes through to the
+  // underlying window global (the accessor forwarding survives the seal + Proxy wrap).
+  ok('maze.state write passthrough', (function(){
+       var prev = mazeRevealed;
+       maze.state.mazeRevealed = !prev;
+       var passed = (mazeRevealed === !prev);
+       maze.state.mazeRevealed = prev; // restore
+       return passed;
+     })());
   // v64 §163 FJ — audit each new rule code appears as a comment in the rendered HTML.
-  var html = document.documentElement.innerHTML;
-  // v65 §181 GB — word-boundary regex avoids false positives (e.g. 'EW' inside
-  // 'newWebSocket') and false negatives from the old fixed-suffix string match.
-  // Each code must appear as a "§N <CODE> ·" / "<CODE> —" tag comment.
-  __VERSION_DELTA__.ruleCodes.forEach(function(code){
-    var re = new RegExp('\\b' + code + '\\b\\s*[·—]');
-    ok('rule '+code+' tagged', re.test(html));
-  });
+  // v66 §196 GQ — compute the audit once and cache it; HTML is immutable after load.
+  if (_ruleAuditCache === null) {
+    var html = document.documentElement.innerHTML;
+    // v65 §181 GB — word-boundary regex avoids false positives (e.g. 'EW' inside
+    // 'newWebSocket') and false negatives from the old fixed-suffix string match.
+    // Each code must appear as a "§N <CODE> ·" / "<CODE> —" tag comment.
+    _ruleAuditCache = __VERSION_DELTA__.ruleCodes.map(function(code){
+      var re = new RegExp('\\b' + code + '\\b\\s*[·—]');
+      return { code: code, pass: re.test(html) };
+    });
+  }
+  _ruleAuditCache.forEach(function(r){ ok('rule '+r.code+' tagged', r.pass); });
+  // v66 §198 GS — ?smoke=verbose logs every assertion (pass/fail + info) for fast triage.
+  if (/[?&]smoke=verbose\b/.test(location.search)) {
+    checks.forEach(function(c){
+      console.log('[smoke]' + (c.pass ? ' ✓ ' : ' ✗ ') + c.name + (c.info !== undefined ? '  → ' + c.info : ''));
+    });
+  }
   var failed = checks.filter(function(c){ return !c.pass; });
   if (failed.length === 0) {
     console.log('%c[smoke] ✓ '+checks.length+' assertions passed', 'color:#3fe178');
@@ -5953,9 +6100,17 @@ showDragHintIfFirstVisit();     // v50 §16 L
   var backdrop = document.createElement('div');
   backdrop.className = 'mz-settings-backdrop';
   document.body.appendChild(backdrop);
+  var scanCanvas = document.getElementById('scan-canvas');
   details.addEventListener('toggle', function(){
-    if (details.open) backdrop.classList.add('visible');
-    else backdrop.classList.remove('visible');
+    if (details.open) {
+      backdrop.classList.add('visible');
+      // v66 §203 GX — lift the canvas above the backdrop so probe drag still works while
+      // the popup is open; the backdrop then only catches clicks on non-canvas chrome.
+      if (scanCanvas) scanCanvas.classList.add('mz-canvas-raised');
+    } else {
+      backdrop.classList.remove('visible');
+      if (scanCanvas) scanCanvas.classList.remove('mz-canvas-raised');
+    }
   });
   backdrop.addEventListener('click', function(){ details.open = false; });
 })();
