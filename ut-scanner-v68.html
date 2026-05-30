@@ -809,16 +809,19 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
    parent (.scan-card) as in v67 and the layout/sizing math is unchanged. */
 #scan-canvas { transform-origin:0 0; transition:transform 0.10s ease-out; }
 #scan-canvas.zooming { transition:none; }
-.zoom-controls { position:absolute; top:8px; right:8px; display:flex; gap:4px; z-index:30; }
-.zoom-controls button { width:30px; height:30px; border-radius:6px; border:1px solid var(--border2);
-  background:rgba(22,27,34,0.85); color:var(--text); font-size:14px; font-weight:700; cursor:pointer;
+/* Controls live at the bottom-right of the canvas area (NOT card-label top-right where they
+   used to cover the X-readout). Compact 24 px chips, semi-transparent so canvas content
+   behind them is still partially visible. */
+.zoom-controls { position:absolute; bottom:8px; right:8px; display:flex; gap:3px; z-index:30;
+  background:rgba(13,17,23,0.55); border:1px solid var(--border); border-radius:7px;
+  padding:2px; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+.zoom-controls button { width:24px; height:24px; border-radius:5px; border:none;
+  background:transparent; color:var(--text); font-size:13px; font-weight:700; cursor:pointer;
   display:flex; align-items:center; justify-content:center; user-select:none; }
-.theme-light .zoom-controls button { background:rgba(255,255,255,0.85); }
-.zoom-controls button:hover { background:var(--surface3); }
-.zoom-controls .zoom-readout { padding:0 8px; font-family:'JetBrains Mono',monospace; font-size:10px;
-  color:var(--muted); display:flex; align-items:center; background:rgba(22,27,34,0.65);
-  border-radius:6px; border:1px solid var(--border); }
-.theme-light .zoom-controls .zoom-readout { background:rgba(255,255,255,0.65); }
+.zoom-controls button:hover { background:rgba(255,255,255,0.10); }
+.theme-light .zoom-controls button:hover { background:rgba(0,0,0,0.08); }
+.zoom-controls .zoom-readout { padding:0 6px; font-family:'JetBrains Mono',monospace; font-size:10px;
+  color:var(--muted); display:flex; align-items:center; }
 </style>
 </head>
 <body>
@@ -6845,10 +6848,26 @@ function _applyZoom(){
   canvas.style.transform = 'translate(' + _zoomTX + 'px,' + _zoomTY + 'px) scale(' + _zoomScale + ')';
   var ro = document.getElementById('zoom-readout'); if (ro) ro.textContent = Math.round(_zoomScale * 100) + '%';
 }
-function zoomCanvas(dir){
-  _zoomScale = Math.max(_ZOOM_MIN, Math.min(_ZOOM_MAX, _zoomScale + dir * _ZOOM_STEP));
-  if (_zoomScale === _ZOOM_MIN) { _zoomTX = 0; _zoomTY = 0; }
+// v68 §211 IL hotfix #3 — anchor zoom at (ax, ay) (canvas-display coords). Multiplicative
+// step so each click feels meaningful (1.5×). Button clicks pass canvas centre; wheel passes
+// cursor position. Keeps the content point under the anchor fixed in place — Google-Maps style.
+function _zoomAt(ax, ay, dir){
+  var oldScale = _zoomScale;
+  var factor   = dir > 0 ? 1.5 : 1/1.5;
+  _zoomScale   = Math.max(_ZOOM_MIN, Math.min(_ZOOM_MAX, _zoomScale * factor));
+  if (_zoomScale <= _ZOOM_MIN + 0.001) { _zoomScale = _ZOOM_MIN; _zoomTX = 0; _zoomTY = 0; }
+  else {
+    // Solve translate so the content point currently at (ax,ay) stays at (ax,ay):
+    //   ax = _zoomTX + contentX * newScale,  contentX = (ax - oldTX) / oldScale
+    _zoomTX = ax - (ax - _zoomTX) * (_zoomScale / oldScale);
+    _zoomTY = ay - (ay - _zoomTY) * (_zoomScale / oldScale);
+  }
   _applyZoom();
+}
+function zoomCanvas(dir){
+  var canvas = document.getElementById('scan-canvas'); if (!canvas) return;
+  var rect   = canvas.getBoundingClientRect();
+  _zoomAt(rect.width / 2, rect.height / 2, dir);
 }
 function zoomReset(){ _zoomScale = 1; _zoomTX = 0; _zoomTY = 0; _applyZoom(); }
 (function wireZoom(){
@@ -6881,11 +6900,15 @@ function zoomReset(){ _zoomScale = 1; _zoomTX = 0; _zoomTY = 0; _applyZoom(); }
     e.preventDefault();
   }, { passive:false });
   canvas.addEventListener('touchend', function(){ canvas.classList.remove('zooming'); }, { passive:true });
-  // Desktop: Ctrl + wheel zoom (over the canvas only).
+  // Desktop: Ctrl + wheel zoom anchored at the cursor position (so the point under the
+  // pointer stays put while everything around it grows / shrinks).
   canvas.addEventListener('wheel', function(e){
     if (!e.ctrlKey) return;
-    var dir = e.deltaY < 0 ? 1 : -1;
-    zoomCanvas(dir);
+    var rect = canvas.getBoundingClientRect();
+    var ax   = e.clientX - rect.left;
+    var ay   = e.clientY - rect.top;
+    var dir  = e.deltaY < 0 ? 1 : -1;
+    _zoomAt(ax, ay, dir);
     e.preventDefault();
   }, { passive:false });
   // Desktop: middle-click + drag pan.
