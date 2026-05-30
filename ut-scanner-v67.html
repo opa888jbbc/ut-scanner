@@ -1,9 +1,20 @@
 <!DOCTYPE html>
 <!--
-  UT NDT Training Simulator — v66
-  Per user 2026-05-29 EDT "同意全部 (A 區 18 條)" — ships v65 six-lens self-play
-  candidates GG-GX (student / professor / NDT expert / coder / dev experience /
-  UI polish — 3 each = 18 items in one ship).
+  UT NDT Training Simulator — v67
+  Per user 2026-05-29 EDT "先把 1 處理完再去做 3" — adopts D 區 option-1 from the
+  proposal: D-V1 beam-visual upgrade + D-V2 Guided Walkthrough framework + D8 5-step
+  6 dB drop guided sizing exercise. Source: 3 Teachable.com screenshots + the
+  1 min 9 s 6 dB drop walkthrough video (uploads/2026-05-29-22-11-19.mp4). Goal:
+  turn the sim from a tool palette into guided lessons so students learn more easily.
+
+  v67 changeset (CLAUDE.md §204-§206):
+    + §204 HQ — Beam Visual Upgrade (D-V1): outer soft-glow, dragging halo, defect-shadow ghost
+    + §205 HR — Guided Walkthrough framework (D-V2): step dots, badge, body, colour-coded
+                CTAs (green/purple/blue/red), red corrective / green success feedback,
+                persistent canvas marks; window.gw is the public API
+    + §206 HS — 6 dB Drop 5-step guided exercise (D8) — built on HR; recreates the
+                Teachable walkthrough end-to-end; Step 4 review reuses the §194 GO
+                beam-width warning as the teaching takeaway
 
   v66 changeset (CLAUDE.md §186-§203):
     Student lens
@@ -268,7 +279,7 @@
 <meta charset="UTF-8">
 <!-- v50 α5 — removed user-scalable=no + maximum-scale to allow mobile pinch zoom -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>UT NDT Training Simulator — v66</title>
+<title>UT NDT Training Simulator — v67</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -657,12 +668,74 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
 .ex-desc.steps details summary::-webkit-details-marker { display:none; }
 .ex-desc.steps details[open] summary { margin-bottom:5px; }
 .ex-desc.steps details p { font-size:10px; color:var(--muted); line-height:1.6; margin:0; }
+
+/* v67 §205 HR — Guided Walkthrough framework styling. Generic enough to host any
+   multi-step exercise (D8 6 dB sizing, future D5/D6 cal, U22 procedure, U23 exam, TOFD). */
+.gw-panel { background:var(--surface); border:2px solid #5b9bff; border-radius:12px;
+  padding:14px 14px 10px; margin-bottom:12px; position:relative; }
+.gw-panel-head { display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:10px; gap:8px; flex-wrap:wrap; }
+.gw-title { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700;
+  color:#9bb8ff; letter-spacing:0.04em; }
+.gw-step-dots { display:flex; gap:6px; align-items:center; }
+.gw-step-dot { width:8px; height:8px; border-radius:50%; background:#3a4250; transition:all .2s; }
+.gw-step-dot--done    { background:#3fe178; }
+.gw-step-dot--current { width:12px; height:12px; background:#5b9bff; box-shadow:0 0 0 3px rgba(91,155,255,0.18); }
+.gw-step-card { padding:6px 4px 8px; display:flex; gap:10px; align-items:flex-start; }
+.gw-badge { flex-shrink:0; width:26px; height:26px; border-radius:50%; background:#5b9bff;
+  color:#fff; font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; margin-top:1px; }
+.gw-step-body { flex:1; }
+.gw-step-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:6px; }
+.gw-step-desc { font-size:11px; color:var(--muted); line-height:1.55; }
+.gw-step-desc b, .gw-step-desc strong { color:var(--text); }
+.gw-cta-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+.gw-cta { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600;
+  padding:9px 18px; border-radius:8px; border:none; cursor:pointer; color:#fff;
+  transition:filter .15s, transform .05s; }
+.gw-cta:hover:not(:disabled) { filter:brightness(1.08); }
+.gw-cta:active:not(:disabled) { transform:translateY(1px); }
+.gw-cta:disabled { opacity:0.45; cursor:not-allowed; }
+.gw-cta--green       { background:#3fa860; }
+.gw-cta--purple      { background:#7a4ed0; }
+.gw-cta--blue        { background:#5b9bff; }
+.gw-cta--red-filled  { background:#c0392b; }
+.gw-feedback { margin-top:10px; padding:10px 12px; border-radius:8px; font-size:11px;
+  line-height:1.55; border:1px solid; }
+.gw-feedback--error   { background:rgba(192,57,43,0.10); border-color:rgba(192,57,43,0.45); color:#ffb0a8; }
+.gw-feedback--success { background:rgba(63,168,96,0.10); border-color:rgba(63,168,96,0.45); color:#bcf0c8; }
+.gw-feedback b { color:#fff; }
+.gw-feedback-cta { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+.gw-footer { display:flex; justify-content:space-between; align-items:center;
+  border-top:1px dashed var(--border); padding-top:8px; margin-top:8px; font-size:11px; color:var(--muted); }
+.gw-back-btn { background:transparent; border:1px solid var(--border); color:var(--muted);
+  font-family:'JetBrains Mono',monospace; font-size:11px; padding:6px 12px;
+  border-radius:6px; cursor:pointer; }
+.gw-back-btn:disabled { opacity:0.4; cursor:not-allowed; }
+.gw-result-row { display:flex; gap:10px; flex-wrap:wrap; margin:8px 0; }
+.gw-result-card { flex:1; min-width:140px; background:rgba(122,78,208,0.10);
+  border:1px solid rgba(122,78,208,0.35); border-radius:10px; padding:10px 12px; text-align:center; }
+.gw-result-label { font-size:10px; color:var(--muted); margin-bottom:4px;
+  font-family:'JetBrains Mono',monospace; letter-spacing:0.04em; }
+.gw-result-value { font-size:20px; font-weight:700; color:#c4a8ff; font-family:'JetBrains Mono',monospace; }
+.gw-takeaway { margin-top:10px; padding:10px 12px; border-radius:8px; font-size:11px;
+  line-height:1.55; background:rgba(63,168,96,0.10); border:1px solid rgba(63,168,96,0.45);
+  color:#bcf0c8; }
+.gw-takeaway b, .gw-takeaway strong { color:#fff; }
+.gw-takeaway-hd { font-size:11px; font-weight:700; color:#3fe178; margin-bottom:4px; }
+@media (max-width:420px) {
+  .gw-panel { padding:10px 10px 8px; }
+  .gw-step-title { font-size:12px; }
+  .gw-step-desc { font-size:10px; }
+  .gw-cta { padding:8px 14px; font-size:11px; }
+  .gw-result-value { font-size:17px; }
+}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v66</span></h1>
+  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v67</span></h1>
   <span class="badge">Pulse-Echo</span>
   <span class="badge" id="freq-badge">5 MHz</span>
   <span class="badge ok" id="ex-badge">Exercise 1</span>
@@ -799,6 +872,30 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
   </ol>
 </div>
 
+<!-- v67 §205 HR — Guided Walkthrough panel. Hidden by default; gw.open(flowId) populates
+     and reveals it (and hides #ex-desc). All multi-step exercises render here. -->
+<div class="gw-panel" id="gw-panel" hidden>
+  <div class="gw-panel-head">
+    <div class="gw-title" id="gw-title">Guided Walkthrough</div>
+    <div class="gw-step-dots" id="gw-step-dots"></div>
+  </div>
+  <div class="gw-step-card">
+    <div class="gw-badge" id="gw-badge">1</div>
+    <div class="gw-step-body">
+      <div class="gw-step-title" id="gw-step-title">—</div>
+      <div class="gw-step-desc" id="gw-step-desc">—</div>
+      <div class="gw-cta-row" id="gw-cta-row"></div>
+      <div id="gw-feedback"></div>
+      <div id="gw-review"></div>
+    </div>
+  </div>
+  <div class="gw-footer">
+    <button class="gw-back-btn" id="gw-back-btn" onclick="gw.back()">← Back</button>
+    <span id="gw-step-label">Step 1 of 5</span>
+    <button class="gw-back-btn" onclick="gw.close()" title="Close the guided walkthrough">✕ Close</button>
+  </div>
+</div>
+
 <!-- v57 §81 CF — VEL CAL Your ToF input + scoring. Visible only when velCalMode is on. -->
 <div id="vel-cal-quiz" style="display:none; padding:10px 14px; margin-bottom:10px; background:rgba(0,229,255,0.06); border:1px solid var(--cyan); border-radius:8px;">
   <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cyan); margin-bottom:6px;">🔬 VEL CAL self-check</div>
@@ -918,6 +1015,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
 <div class="controls-row tools-panel" id="tools-panel" style="display:none; flex-wrap:wrap;">
   <!-- v52 §38 AI — 6 dB drop sizing tool. -->
   <button class="reset-btn" id="sizing-btn" onclick="sizingClick()" title="6 dB drop sizing: capture reference at peak, then mark −6 dB edges">📏 Size −6 dB</button>
+  <!-- v67 §206 HS — guided 5-step 6 dB drop sizing exercise (built on the HR framework). -->
+  <button class="reset-btn" id="gw-6db-btn" onclick="gw.open('6db-sizing')" title="Guided 5-step 6 dB drop sizing exercise — recreates the classic teaching-website walkthrough.">🎓 Guided 6dB Sizing</button>
   <!-- v53 §48 AS — DGS sizing -->
   <button class="reset-btn" id="dgs-btn" onclick="dgsSize()" title="DGS sizing — ⚠ TEACHING-GRADE, NOT FOR CERTIFICATION. Estimates an equivalent reflector size from your peak amplitude + sound-path. For Level 2 exam-grade sizing, use the official Krautkrämer DGS chart for your specific probe.">📐 DGS Size</button>
   <!-- v54 §59 BC — Set sensitivity -->
@@ -3088,6 +3187,44 @@ function drawScan() {
 
   var posMM=Math.round((txX-MAT_X)/MAT_W*240);
   document.getElementById('tx-pos-label').textContent='X: '+posMM+' mm';
+
+  // v67 §205 HR — overlay the guided-walkthrough persistent canvas marks (cyan vlines + width
+  // label) so the student sees what they've already marked, across steps.
+  if (typeof _drawGwCanvasMarks === 'function') _drawGwCanvasMarks(ctx);
+}
+
+// v67 §205 HR — paint persistent gw canvas marks (vlines at user-marked X positions + width
+// label between L and R). Uses the same 240 mm horizontal scan range the sizing tool uses.
+function _drawGwCanvasMarks(ctx){
+  if (!window.gw || !gw.canvasMarks || gw.canvasMarks.length === 0) return;
+  if (exercise === 'maze' || exercise === 'grating') return;
+  var ys = SURF_Y, yb = MAT_Y + MAT_H;
+  var marksByLabel = {};
+  gw.canvasMarks.forEach(function(m){
+    if (m.type !== 'vline') return;
+    var x = MAT_X + (m.x_mm / 240) * MAT_W;
+    marksByLabel[m.label] = x;
+    ctx.strokeStyle = m.color || 'rgba(0,229,255,0.85)';
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(x, ys - 6); ctx.lineTo(x, yb); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = m.color || 'rgba(0,229,255,0.95)';
+    ctx.font = 'bold 11px JetBrains Mono,monospace'; ctx.textAlign = 'center';
+    ctx.fillText(m.label, x, ys - 10);
+  });
+  if (marksByLabel.L !== undefined && marksByLabel.R !== undefined) {
+    var x1 = Math.min(marksByLabel.L, marksByLabel.R);
+    var x2 = Math.max(marksByLabel.L, marksByLabel.R);
+    var midX = (x1 + x2) / 2;
+    var widthMm = Math.abs((marksByLabel.R - marksByLabel.L) / MAT_W * 240);
+    var yBar = ys + 10;
+    ctx.strokeStyle = 'rgba(0,229,255,0.55)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x1, yBar); ctx.lineTo(x2, yBar); ctx.stroke();
+    ctx.fillStyle = 'rgba(0,229,255,0.95)';
+    ctx.font = 'bold 10px JetBrains Mono,monospace'; ctx.textAlign = 'center';
+    ctx.fillText(widthMm.toFixed(1) + ' mm', midX, yBar - 3);
+  }
 }
 
 // v53 §37 AH + v54 §61 BE — IIW V1 calibration block, expanded with full ISO 2400 features.
@@ -3511,6 +3648,17 @@ function drawWeldBeam(ctx, bColor) {
   var labelOffX = (skewAngle===180) ? -52 : 6;
   ctx.fillStyle=bColor+'0.85)';ctx.font='10px JetBrains Mono,monospace';ctx.textAlign='left';
   ctx.fillText(freq+' MHz  '+skewStr, tx+labelOffX, beamTop+13);
+
+  // v67 §204 HQ (b) — soft white halo around the transducer while dragging (same idea as
+  // drawStandardBeam). Drawn last so it sits above the beam rays without altering colour.
+  if (typeof dragging !== 'undefined' && dragging) {
+    var haloW = ctx.createRadialGradient(tx, beamTop, 0, tx, beamTop, 22);
+    haloW.addColorStop(0,   'rgba(255,255,255,0.45)');
+    haloW.addColorStop(0.55,'rgba(255,255,255,0.12)');
+    haloW.addColorStop(1,   'rgba(255,255,255,0.00)');
+    ctx.fillStyle = haloW;
+    ctx.beginPath(); ctx.arc(tx, beamTop, 22, 0, Math.PI*2); ctx.fill();
+  }
 }
 
 // ── STANDARD VERTICAL BEAM (ex1 + ex2) ──────────────
@@ -3569,6 +3717,18 @@ function drawStandardBeam(ctx, bColor) {
   var ffHWStart = (nearFieldY < beamCutY)
                    ? Math.min(N_px, cutFrac*fullD)*Math.tan(bAngle)*0.5
                    : 0;
+  // v67 §204 HQ (a) — outer soft-glow: same cone shape, very low alpha, shadowBlur for a
+  // gentle haze that makes the beam read like light, not a polygon. Drawn UNDER the cone.
+  ctx.save();
+  ctx.shadowColor = bColor + '0.45)';
+  ctx.shadowBlur = 7;
+  ctx.fillStyle = bColor + '0.10)';
+  ctx.beginPath();
+  ctx.moveTo(tx-ffHWStart*1.10, nearFieldY); ctx.lineTo(tx+ffHWStart*1.10, nearFieldY);
+  ctx.lineTo(tx+hWCut*1.10, beamCutY);       ctx.lineTo(tx-hWCut*1.10, beamCutY);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
   var beamGrad = ctx.createLinearGradient(0,nearFieldY,0,beamCutY);
   beamGrad.addColorStop(0,   bColor+'0.52)');
   beamGrad.addColorStop(0.55,bColor+'0.20)');
@@ -3578,6 +3738,22 @@ function drawStandardBeam(ctx, bColor) {
   ctx.moveTo(tx-ffHWStart, nearFieldY); ctx.lineTo(tx+ffHWStart, nearFieldY);
   ctx.lineTo(tx+hWCut, beamCutY);       ctx.lineTo(tx-hWCut, beamCutY);
   ctx.closePath(); ctx.fill();
+
+  // v67 §204 HQ (c) — ghost extension below the defect. When the beam is cut at a defect
+  // (beamCutY < beamBot), draw a very faint continuation down to the back wall so the cut
+  // does not look like a hard switch — physically corresponds to small transmitted energy
+  // past the reflector. Satisfies the spirit of CLAUDE.md §1 (no on/off beam transitions).
+  if (beamCutY < beamBot - 2) {
+    var ghostHW = (1.0 * fullD * Math.tan(bAngle)); // hypothetical far-field width at beamBot
+    var ghostGrad = ctx.createLinearGradient(0, beamCutY, 0, beamBot);
+    ghostGrad.addColorStop(0,   bColor + '0.04)');
+    ghostGrad.addColorStop(1,   bColor + '0.00)');
+    ctx.fillStyle = ghostGrad;
+    ctx.beginPath();
+    ctx.moveTo(tx-hWCut,  beamCutY); ctx.lineTo(tx+hWCut,  beamCutY);
+    ctx.lineTo(tx+ghostHW, beamBot); ctx.lineTo(tx-ghostHW, beamBot);
+    ctx.closePath(); ctx.fill();
+  }
 
   // Cone boundary lines — linear from probe centre to far-field edge
   ctx.strokeStyle = bColor+'0.45)'; ctx.lineWidth = 1; ctx.setLineDash([3,4]);
@@ -3596,6 +3772,17 @@ function drawStandardBeam(ctx, bColor) {
 
   ctx.fillStyle = bColor+'0.85)'; ctx.font='10px JetBrains Mono,monospace'; ctx.textAlign='center';
   ctx.fillText(freq+' MHz · D='+D_mm+' mm · θ½='+(bAngle*180/Math.PI).toFixed(1)+'°', tx, beamTop+13);
+
+  // v67 §204 HQ (b) — soft white halo around the transducer while dragging, so the active
+  // probe reads as "live" without a colour change. Painted last = on top of everything.
+  if (typeof dragging !== 'undefined' && dragging) {
+    var halo = ctx.createRadialGradient(tx, beamTop, 0, tx, beamTop, 22);
+    halo.addColorStop(0,   'rgba(255,255,255,0.45)');
+    halo.addColorStop(0.55,'rgba(255,255,255,0.12)');
+    halo.addColorStop(1,   'rgba(255,255,255,0.00)');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(tx, beamTop, 22, 0, Math.PI*2); ctx.fill();
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -5026,7 +5213,7 @@ function exportScanPlan(){
   md += '- **Display mode:** ' + (advancedMode ? 'ADVANCED' : 'BASIC') + ' / ' + learnMode.toUpperCase() + '\n';
   md += '- **Probe position X:** ' + Math.round((txX-MAT_X)/MAT_W*240) + ' mm\n';
   md += '- **Sound-path range:** 0..200 mm\n';
-  md += '- **Generated by:** UT NDT Trainer v66\n';
+  md += '- **Generated by:** UT NDT Trainer v67\n';
   // v59 §99 CX — append Corrosion Maze score if a round has been revealed.
   if (mazeScore) {
     var hrPct = (mazeScore.hitRate*100).toFixed(0);
@@ -5304,6 +5491,242 @@ function sizingClick(){
     btn.style.borderColor = ''; btn.style.color = '';
   }
 }
+
+// v67 §205 HR — Guided Walkthrough framework. Reusable JS engine that hosts any multi-step
+// exercise. Pattern: GW_FLOWS describes the steps; gw.open(id) renders them into #gw-panel;
+// each step has an onSubmit callback that validates state and either advances or shows a red
+// corrective card. Persistent state (canvasMarks) is drawn over the scan canvas every frame.
+var gw = {
+  flowId: null,
+  stepIdx: 0,
+  state: {},
+  canvasMarks: [],
+
+  open: function(flowId){
+    var flow = GW_FLOWS[flowId];
+    if (!flow) { console.warn('[gw] unknown flow', flowId); return; }
+    this.flowId = flowId; this.stepIdx = 0; this.state = {}; this.canvasMarks = [];
+    if (flow.exercise && exercise !== flow.exercise && typeof setExercise === 'function') {
+      setExercise(flow.exercise);
+    }
+    var exDesc = document.getElementById('ex-desc');         if (exDesc) exDesc.style.display = 'none';
+    var fs     = document.getElementById('findings-sheet');  if (fs) fs.style.display = 'none';
+    var panel  = document.getElementById('gw-panel');        if (panel) panel.hidden = false;
+    this.render();
+    if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior:'smooth', block:'start' });
+  },
+
+  close: function(){
+    this.flowId = null; this.stepIdx = 0; this.state = {}; this.canvasMarks = [];
+    var panel  = document.getElementById('gw-panel');        if (panel) panel.hidden = true;
+    var exDesc = document.getElementById('ex-desc');         if (exDesc) exDesc.style.display = '';
+    var fs     = document.getElementById('findings-sheet');  if (fs) fs.style.display = '';
+  },
+
+  back: function(){
+    if (this.stepIdx > 0) { this.stepIdx--; this._clearFeedback(); this.render(); }
+  },
+
+  goto: function(idx){
+    var flow = GW_FLOWS[this.flowId]; if (!flow) return;
+    this.stepIdx = Math.max(0, Math.min(flow.steps.length - 1, idx));
+    this._clearFeedback(); this.render();
+  },
+
+  next: function(){
+    var flow = GW_FLOWS[this.flowId]; if (!flow) return;
+    if (this.stepIdx < flow.steps.length - 1) {
+      this.stepIdx++; this._clearFeedback(); this.render();
+    }
+  },
+
+  submit: function(){
+    var flow = GW_FLOWS[this.flowId]; if (!flow) return;
+    var step = flow.steps[this.stepIdx];
+    if (!step || typeof step.onSubmit !== 'function') return;
+    var result = step.onSubmit(this.state) || {};
+    if (result.ok) {
+      if (result.canvasMark) this.canvasMarks.push(result.canvasMark);
+      var isLast = (this.stepIdx === flow.steps.length - 1);
+      this.feedback('success', result.msg || 'Done.', isLast ? null : { label:'Next Step →', onClick:function(){ gw.next(); } });
+      if (typeof step.onPass === 'function') step.onPass(this.state, result);
+    } else {
+      this.feedback('error', result.msg || 'Not quite.', null);
+    }
+  },
+
+  feedback: function(type, msg, ctaCfg){
+    var el = document.getElementById('gw-feedback'); if (!el) return;
+    var cls = (type === 'success') ? 'gw-feedback--success' : 'gw-feedback--error';
+    var ctaHtml = '';
+    if (ctaCfg) {
+      window._gwTempCtaHandler = ctaCfg.onClick;
+      ctaHtml = '<div class="gw-feedback-cta"><button class="gw-cta gw-cta--blue" onclick="(window._gwTempCtaHandler||function(){})()">' + ctaCfg.label + '</button></div>';
+    }
+    el.innerHTML = '<div class="gw-feedback ' + cls + '">' + msg + ctaHtml + '</div>';
+  },
+
+  _clearFeedback: function(){
+    var fb = document.getElementById('gw-feedback'); if (fb) fb.innerHTML = '';
+    var rv = document.getElementById('gw-review');   if (rv) rv.innerHTML = '';
+  },
+
+  render: function(){
+    var flow = GW_FLOWS[this.flowId]; if (!flow) return;
+    var step = flow.steps[this.stepIdx]; if (!step) return;
+    var t = document.getElementById('gw-title'); if (t) t.textContent = flow.title;
+    var dots = document.getElementById('gw-step-dots');
+    if (dots) {
+      var html = '';
+      for (var i = 0; i < flow.steps.length; i++) {
+        var cls = 'gw-step-dot';
+        if (i < this.stepIdx) cls += ' gw-step-dot--done';
+        else if (i === this.stepIdx) cls += ' gw-step-dot--current';
+        html += '<div class="' + cls + '" title="Step ' + (i+1) + '"></div>';
+      }
+      dots.innerHTML = html;
+    }
+    var badge = document.getElementById('gw-badge');   if (badge) badge.textContent = String(step.num || (this.stepIdx + 1));
+    var st = document.getElementById('gw-step-title'); if (st) st.textContent = step.title || '—';
+    var sd = document.getElementById('gw-step-desc');  if (sd) sd.innerHTML = step.body || '';
+    var ctaRow = document.getElementById('gw-cta-row');
+    if (ctaRow) {
+      if (step.cta) {
+        var color = step.cta.color || 'blue';
+        ctaRow.innerHTML = '<button class="gw-cta gw-cta--' + color + '" onclick="gw.submit()">' + (step.cta.label || 'Submit') + '</button>';
+      } else if (step.render) {
+        ctaRow.innerHTML = step.render(this.state);
+      } else {
+        ctaRow.innerHTML = '';
+      }
+    }
+    var rv = document.getElementById('gw-review');
+    if (rv) rv.innerHTML = step.review ? step.review(this.state) : '';
+    var bk = document.getElementById('gw-back-btn');   if (bk) bk.disabled = (this.stepIdx === 0);
+    var sl = document.getElementById('gw-step-label'); if (sl) sl.textContent = 'Step ' + (this.stepIdx + 1) + ' of ' + flow.steps.length;
+  }
+};
+window.gw = gw;
+
+// v67 §206 HS — D8 6 dB drop guided sizing flow. Built on the §205 HR framework.
+// Recreates the teachable.com 1 min 9 s 6 dB drop sizing exercise end-to-end.
+var GW_FLOWS = {
+  '6db-sizing': {
+    title: 'Guided Walkthrough · 6 dB Drop Defect Sizing',
+    exercise: 'penetration',
+    steps: [
+      { // ---- Step 1 ----
+        num: 1,
+        title: 'Capture maximum amplitude',
+        body: 'Drag the transducer across the test object and watch the <b>D peak</b> on the A-scan. Find the position where the D peak reaches its highest value (right over an SDH). When it is at its maximum, click <b>Set Maximum</b> — this becomes your 100&nbsp;% reference.',
+        cta: { label: 'Set Maximum', color: 'green' },
+        onSubmit: function(state){
+          var amp = window._lastMaxDefAmp || 0;
+          if (amp < 0.10) {
+            return { ok:false, msg:'<b>No D peak detected.</b> The current D-peak amplitude is ' + (amp*100).toFixed(0) + '&nbsp;% FSH — drag the probe over a defect first so the D peak rises above 10&nbsp;% FSH, then click <b>Set Maximum</b>.' };
+          }
+          state.refAmp = amp;
+          state.refXmm = (txX - MAT_X) / MAT_W * 240;
+          return { ok:true, msg:'<b>Reference captured:</b> ' + (amp*100).toFixed(0) + '&nbsp;% FSH at X = <b>' + state.refXmm.toFixed(1) + ' mm</b>. This is your 100&nbsp;% reference for the 6 dB drop.' };
+        }
+      },
+      { // ---- Step 2 ----
+        num: 2,
+        title: 'Move to the LEFT edge — find the 6 dB drop',
+        body: 'Now slowly drag the transducer to the <b>left</b> until the echo drops to <b>half of your reference</b> (the 50&nbsp;% mark). This is the <b>6 dB drop point</b> — where the beam is half on and half off the defect edge. Click <b>Mark Left Edge</b> when the D peak is at the half-amplitude level.',
+        cta: { label: 'Mark Left Edge', color: 'purple' },
+        onSubmit: function(state){
+          var amp = window._lastMaxDefAmp || 0;
+          var ref = state.refAmp || 1;
+          var target = 0.5 * ref;
+          var nowPct = amp / ref * 100;
+          var nowXmm = (txX - MAT_X) / MAT_W * 240;
+          var devFrac = Math.abs(amp - target) / ref;
+          if (devFrac < 0.08) {
+            state.leftXmm = nowXmm;
+            return { ok:true,
+                     msg:'<b>Done!</b> Left edge marked at <b>' + nowXmm.toFixed(1) + ' mm</b> (D peak = ' + nowPct.toFixed(0) + '&nbsp;% of reference).',
+                     canvasMark: { type:'vline', x_mm: nowXmm, label:'L', color:'rgba(0,229,255,0.90)' } };
+          }
+          var dir = (amp > target)
+            ? 'still too high — keep moving <b>further away</b> from the defect centre'
+            : 'now too low — move <b>back toward</b> the defect centre';
+          return { ok:false, msg:'<b>Not quite.</b> Echo is at <b>' + nowPct.toFixed(0) + '&nbsp;%</b> — the 6 dB drop level is <b>50&nbsp;%</b>. The echo is ' + dir + '.' };
+        }
+      },
+      { // ---- Step 3 ----
+        num: 3,
+        title: 'Move to the RIGHT edge — find the 6 dB drop',
+        body: 'Now drag the transducer to the <b>right</b>, past the peak, until the echo again drops to <b>50&nbsp;% of the reference</b>. Click <b>Mark Right Edge</b> at the half-amplitude level.',
+        cta: { label: 'Mark Right Edge', color: 'purple' },
+        onSubmit: function(state){
+          var amp = window._lastMaxDefAmp || 0;
+          var ref = state.refAmp || 1;
+          var target = 0.5 * ref;
+          var nowPct = amp / ref * 100;
+          var nowXmm = (txX - MAT_X) / MAT_W * 240;
+          var devFrac = Math.abs(amp - target) / ref;
+          if (devFrac < 0.08) {
+            state.rightXmm = nowXmm;
+            return { ok:true,
+                     msg:'<b>Done!</b> Right edge marked at <b>' + nowXmm.toFixed(1) + ' mm</b> (D peak = ' + nowPct.toFixed(0) + '&nbsp;% of reference).',
+                     canvasMark: { type:'vline', x_mm: nowXmm, label:'R', color:'rgba(0,229,255,0.90)' } };
+          }
+          var dir = (amp > target)
+            ? 'still too high — keep moving <b>further away</b> from the defect centre'
+            : 'now too low — move <b>back toward</b> the defect centre';
+          return { ok:false, msg:'<b>Not quite.</b> Echo is at <b>' + nowPct.toFixed(0) + '&nbsp;%</b> — the 6 dB drop level is <b>50&nbsp;%</b>. The echo is ' + dir + '.' };
+        }
+      },
+      { // ---- Step 4 ----
+        num: 4,
+        title: 'Review your measurement',
+        body: 'The distance between your two marks is the <b>6 dB drop size</b> of the defect.',
+        review: function(state){
+          var measured = Math.abs((state.rightXmm || 0) - (state.leftXmm || 0));
+          // Per §43 AN, EX02 SDHs are ASTM E2491 Φ 3 mm.
+          var actual = 3.0;
+          // Use the v66 §194 GO helpers to drive the takeaway.
+          var sp = (typeof _currentDefectSP === 'function') ? _currentDefectSP() : 50;
+          var beamW = (typeof _estBeamWidthMm === 'function') ? _estBeamWidthMm(sp) : 12;
+          var err = Math.abs(measured - actual);
+          var beamLimited = (actual < beamW);
+          var takeaway;
+          if (beamLimited) {
+            takeaway = '<div class="gw-takeaway-hd">📚 Why your number is so far off</div>'+
+                       'The actual SDH is only <b>' + actual.toFixed(1) + ' mm</b>, but the beam diameter at this sound path is about <b>' + beamW.toFixed(1) + ' mm</b>. ' +
+                       'The 6 dB drop technique works for defects <b>larger than the beam width</b>. ' +
+                       'For smaller reflectors like this one, the 6 dB drop tracks the <b>beam</b>, not the flaw — so the value you measured is roughly the beam width, not the SDH size. ' +
+                       'For smaller defects, use the <b>20 dB drop</b> or <b>DGS</b> method instead.';
+          } else if (err <= 1.0) {
+            takeaway = '<div class="gw-takeaway-hd">✓ Within ±1 mm — pass</div>'+
+                       'Your 6 dB drop sizing matches the actual defect within ±1 mm. The technique worked because the reflector (' + actual.toFixed(1) + ' mm) is larger than the beam diameter (' + beamW.toFixed(1) + ' mm) at this depth.';
+          } else {
+            takeaway = '<div class="gw-takeaway-hd">⚠ Off by ' + err.toFixed(1) + ' mm</div>'+
+                       'Try again — slow down at the half-amplitude point and watch the dashed 50&nbsp;% line on the A-scan.';
+          }
+          var errLine = 'Error: <b>' + err.toFixed(1) + ' mm</b>. The 6 dB drop technique gives the defect size as the distance between the transducer centre positions where the signal drops to half (−6 dB).';
+          return '<div class="gw-result-row">'+
+                   '<div class="gw-result-card"><div class="gw-result-label">Your Measured Defect Size</div><div class="gw-result-value">' + measured.toFixed(1) + ' mm</div></div>'+
+                   '<div class="gw-result-card"><div class="gw-result-label">Actual Defect Size</div><div class="gw-result-value">' + actual.toFixed(1) + ' mm</div></div>'+
+                 '</div>'+
+                 '<div style="font-size:11px;color:var(--muted);line-height:1.55;margin-top:4px;">' + errLine + '</div>'+
+                 '<div class="gw-takeaway">' + takeaway + '</div>'+
+                 '<div class="gw-cta-row"><button class="gw-cta gw-cta--blue" onclick="gw.next()">Next Step →</button></div>';
+        }
+      },
+      { // ---- Step 5 ----
+        num: 5,
+        title: 'Done — you finished the 6 dB drop exercise',
+        body: 'You learned how to capture a reference peak, find the half-amplitude points on either side of a reflector, and read your measured size against the actual size. You also saw why the 6 dB drop technique is limited by the beam width.',
+        render: function(state){
+          return '<button class="gw-cta gw-cta--green" onclick="gw.goto(0); gw.state = {}; gw.canvasMarks = [];">↺ Try again</button>'+
+                 '<button class="gw-cta gw-cta--red-filled" onclick="gw.close()">✓ Complete and Continue</button>';
+        }
+      }
+    ]
+  }
+};
 // v52 §39 AJ — Vault glossary link handler. Tries obsidian:// first, falls back to
 // copying the path to clipboard so other viewers (no Obsidian) can still find the doc.
 function onVaultLinkClick(e){
@@ -5982,8 +6405,10 @@ if (savedMode === 'quiz') {
 // runSmokeTests audits that each code appears as a `§N XX —` comment in the page
 // HTML (proves the touch point is tagged); missing codes log a banner warning.
 var __VERSION_DELTA__ = Object.freeze({
-  version: 'v66',
-  ruleCodes: ['GG','GH','GI','GJ','GK','GL','GM','GN','GO','GP','GQ','GR','GS','GT','GU','GV','GW','GX']
+  version: 'v67',
+  // v67 ships 3 D-area rules (HQ beam-visual, HR Guided Walkthrough framework, HS 6 dB drop
+  // guided exercise). Smoke asserts ruleCodes.length matches this ship's adopted count.
+  ruleCodes: ['HQ','HR','HS']
 });
 // v66 §196 GQ — the rule-code audit serialises the whole document (innerHTML) and regex-tests
 // each code. The HTML never changes after load, so cache the result and skip the expensive
@@ -6043,8 +6468,13 @@ function runSmokeTests(){
   ok('_formatElapsedDelta slower', _formatElapsedDelta({elapsed:60},{elapsed:48}).indexOf('slower') >= 0);
   ok('_formatElapsedDelta faster', _formatElapsedDelta({elapsed:40},{elapsed:50}).indexOf('faster') >= 0);
   ok('__VERSION_DELTA__ frozen', Object.isFrozen(__VERSION_DELTA__));
-  // v66 §200 GU — the hand-maintained ruleCodes list must match the 18 GG..GX rules (§186-203).
-  ok('ruleCodes count 18', __VERSION_DELTA__.ruleCodes.length === 18, __VERSION_DELTA__.ruleCodes.length);
+  // v66 §200 GU — the hand-maintained ruleCodes list must match the count of rules adopted
+  // for this ship. v67 adopts 3 D-area rules (HQ/HR/HS); update this expected count per ship.
+  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 3, __VERSION_DELTA__.ruleCodes.length);
+  // v67 §205 HR — guided-walkthrough framework is wired to window.gw with the expected API.
+  ok('gw.open exposed',         typeof window.gw === 'object' && typeof window.gw.open === 'function');
+  ok('gw close/back/submit',    typeof window.gw.close === 'function' && typeof window.gw.back === 'function' && typeof window.gw.submit === 'function');
+  ok('GW_FLOWS 6db-sizing',     typeof GW_FLOWS === 'object' && GW_FLOWS['6db-sizing'] && GW_FLOWS['6db-sizing'].steps.length === 5);
   // v66 §195 GP — writing a valid key via the maze.state Proxy still passes through to the
   // underlying window global (the accessor forwarding survives the seal + Proxy wrap).
   ok('maze.state write passthrough', (function(){
