@@ -3307,47 +3307,33 @@ function drawScan() {
     } // v55 §58 BB-full — close !velCalMode branch
   }
 
-  // ── v69 §216 A2 — Soft radial-gradient shadow under the transducer + each visible defect.
-  //    Drawn BEFORE the transducer fill so it sits behind. Gives the canvas depth so the probe
-  //    no longer looks pasted flat onto the test piece. Per CLAUDE.md §4 the shadow stays
-  //    very low alpha (max ~0.22) so it does not compete with the beam.
-  (function _drawV69Shadows(){
-    if (typeof MAT_X !== 'number') return;
-    // Probe shadow: an elliptical radial gradient just beneath the probe footprint.
-    var sxc = txX, syc = SURF_Y + Math.max(3, TX_H * 0.10);
-    var srx = TX_W * 0.95, sry = Math.max(3, TX_H * 0.18);
-    var pg = ctx.createRadialGradient(sxc, syc, 0, sxc, syc, srx);
-    pg.addColorStop(0,    'rgba(0,0,0,0.22)');
-    pg.addColorStop(0.55, 'rgba(0,0,0,0.10)');
-    pg.addColorStop(1,    'rgba(0,0,0,0.00)');
+  // ── v69 §216 A2 (hotfix per user video 2026-05-31 EDT) — depth-fading directional shadow.
+  //    Original v69 implementation was a flat horizontal ellipse "on the floor" under the
+  //    probe; user fed back that the shadow should be a beam-direction soft column from the
+  //    probe extending DOWN into the workpiece and fading to fully transparent well before
+  //    the back wall ("照射下來應該要漸漸消失才對而不是穿透到底部"). Now uses a vertical
+  //    linear gradient + a cone-narrowing trapezoid path. EX5 maze still skipped (top-down).
+  if (exercise !== 'maze' && typeof MAT_X === 'number' && typeof MAT_Y === 'number') {
+    var sxc   = txX;
+    var sTopY = SURF_Y;                    // start at workpiece surface
+    var sBotY = MAT_Y + MAT_H * 0.55;      // fully transparent by 55 % depth — never touches back wall
+    var sTopW = TX_W * 0.85;               // top width — slightly narrower than probe
+    var sBotW = TX_W * 0.35;               // bottom width — soft cone convergence
+    var sg = ctx.createLinearGradient(sxc, sTopY, sxc, sBotY);
+    sg.addColorStop(0.0,  'rgba(0,0,0,0.17)');
+    sg.addColorStop(0.45, 'rgba(0,0,0,0.06)');
+    sg.addColorStop(1.0,  'rgba(0,0,0,0.00)');
     ctx.save();
-    ctx.translate(sxc, syc); ctx.scale(1, sry / srx); ctx.translate(-sxc, -syc);
-    ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(sxc, syc, srx, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = sg;
+    ctx.beginPath();
+    ctx.moveTo(sxc - sTopW / 2, sTopY);
+    ctx.lineTo(sxc + sTopW / 2, sTopY);
+    ctx.lineTo(sxc + sBotW / 2, sBotY);
+    ctx.lineTo(sxc - sBotW / 2, sBotY);
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
-    // Defect shadows — only for defects rendered as discrete dots (EX01 pores, EX02 SDHs).
-    function shadowAt(cx, cy, r){
-      var dg = ctx.createRadialGradient(cx, cy + r * 0.9, 0, cx, cy + r * 0.9, r * 1.6);
-      dg.addColorStop(0,    'rgba(0,0,0,0.20)');
-      dg.addColorStop(0.6,  'rgba(0,0,0,0.06)');
-      dg.addColorStop(1,    'rgba(0,0,0,0.00)');
-      ctx.save();
-      ctx.translate(cx, cy + r * 0.9); ctx.scale(1, 0.40); ctx.translate(-cx, -(cy + r * 0.9));
-      ctx.fillStyle = dg; ctx.beginPath(); ctx.arc(cx, cy + r * 0.9, r * 1.6, 0, Math.PI*2); ctx.fill();
-      ctx.restore();
-    }
-    if (exercise === 'resolution' && typeof PORE_PATTERN !== 'undefined' && PORE_PATTERN) {
-      PORE_PATTERN.forEach(function(p){
-        var px = MAT_X + p.rx * MAT_W, py = MAT_Y + p.ry * MAT_H;
-        shadowAt(px, py, Math.max(3, MAT_W * 0.006));
-      });
-    } else if (exercise === 'penetration') {
-      [SHALLOW_SDH, REF_SDH, DEEP, FAR_SDH].forEach(function(d){
-        if (!d) return;
-        var dx = MAT_X + d.rx * MAT_W, dy = MAT_Y + d.ry * MAT_H;
-        shadowAt(dx, dy, Math.max(3, MAT_W * 0.005));
-      });
-    }
-  })();
+  }
 
   // ── TRANSDUCER ───────────────────────────────────────
   var tLeft=txX-TX_W/2, tTop=SURF_Y-TX_H;

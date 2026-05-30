@@ -688,12 +688,13 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
   - 既有 §6 EJ 的高斯取向衰減保持不變,A1 只解決「空間邊緣」這一維度的硬切感
   - 對使用者視覺 = 探頭橫向移過缺陷時,peak 像呼吸一樣慢慢長出又慢慢退掉,而不是 binary 0/1 切換
 
-216\. 【A2 · radial-gradient 陰影(探頭 + 缺陷)】drawScan 在繪 transducer 之前,新增 `_drawV69Shadows()` IIFE:
-  - 探頭下方畫橢圓 radial gradient(rx=TX_W×0.95,ry≈3px,alpha 0~0.22),用 ctx.scale 壓扁成橢圓
-  - 缺陷(EX01 的 PORE_PATTERN 5 點 / EX02 的 4 個 SDH)各畫一個半徑 r×1.6 的小陰影(alpha 0~0.20,壓扁 0.40)
-  - 視覺給工件加深度感,呼應老闆「程式更圓滑更完美」要求
-  - alpha 嚴格 ≤ 0.22 → 不會競爭 beam 視覺(per CLAUDE.md §4 視覺重點在 beam)
-  - 只在 EX01 / EX02 / EX03 / EX04(标準探頭視圖) 啟用,EX05 maze 因為俯視 paradigm 不適用,函式內以 exercise 過濾
+216\. 【A2 · 探頭深度方向陰影(2026-05-31 EDT v69 hotfix)】drawScan 在繪 transducer 之前新增深度方向陰影:
+  - **初版(已捨棄)**:探頭下方一坨橢圓 radial gradient + 缺陷下也各一個橢圓。使用者影片回報「照射下來應該要漸漸消失才對而不是穿透到底部」,初版概念錯了(地面投影 vs 光束投影)
+  - **hotfix 版本(現行)**:從 SURF_Y 起,沿探頭中軸往下畫**梯形 vertical linear gradient**,top 寬 0.85×TX_W、bot 寬 0.35×TX_W(微 cone 收斂),alpha 0.17 → 0.06 → 0(@ 0%/45%/100%)。`sBotY = MAT_Y + MAT_H × 0.55` 確保**陰影在 55% 深度前已完全透明,絕不延伸到 back wall**
+  - 缺陷下陰影砍掉(初版加的小橢圓被指為干擾)
+  - 概念:這是「探頭打入工件的光束 darken column」,深度越深越淡,呼應使用者要求的「漸漸消失」
+  - alpha 嚴格 ≤ 0.17 → 不競爭 beam 視覺(per CLAUDE.md §4)
+  - EX05 maze 因為俯視 paradigm 不適用,函式內以 `exercise !== 'maze'` 過濾
 
 
 
