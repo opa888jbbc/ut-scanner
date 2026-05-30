@@ -656,7 +656,7 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 
   `setExercise()` 經 `_onExChanged()` 鉤每次 EX 切換時 re-render(`window.setExercise` wrapper 在 v68 章節定義)。`body { padding-bottom:78px }` @media gate 確保底列不蓋畫面。
 
-211\. 【IL · Canvas pinch-zoom + drag-pan(scan canvas)】`#scan-canvas` 包進 `.canvas-zoom-wrap`,用 CSS `transform: translate(...) scale(...)`(transform-origin 0 0)做縮放,**只縮 canvas 本體,UI overlay(drag-hint / scan-hint / HUD)不放大**(per 使用者明示「UI 不放大」)。
+211\. 【IL · Canvas pinch-zoom + drag-pan(scan canvas)】CSS `transform: translate(...) scale(...)`(transform-origin 0 0)**直接套在 `#scan-canvas` 本體**,不另起 wrapper(早期 v68 試過 `.canvas-zoom-wrap` 中介層,造成某些佈局下 `scanCanvas.parentElement.clientWidth` 量到 0 → canvas + ascan 雙崩,使用者抓到立刻改成直接套 canvas,parent 仍是 `.scan-card`,已有 `overflow:hidden`)。**只縮 canvas 本體,UI overlay(drag-hint / scan-hint / HUD)不放大**(per 使用者明示「UI 不放大」)。`#zoom-controls` 用 `position:absolute` 浮在 `.scan-card` 右上角(z-index 30)。
   - 手機:2-finger pinch → scale(1×~4×);2-finger pan → translate
   - 桌機:Ctrl + wheel = zoom;middle-click + drag = pan
   - canvas 右上 `.zoom-controls`(`−` / `100%` 讀值 / `+` / `⟲ reset`)觸控 / 桌機通用

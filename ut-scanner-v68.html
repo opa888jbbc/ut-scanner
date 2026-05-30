@@ -805,10 +805,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
 }
 
 /* ──────────────────────── v68 §211 IL — Canvas pinch-zoom + drag-pan ──────────────────────── */
-/* Wraps #scan-canvas in a frame. Apply CSS transform to the canvas while UI overlays stay still. */
-.canvas-zoom-wrap { position:relative; overflow:hidden; }
-.canvas-zoom-wrap > canvas { transform-origin:0 0; transition:transform 0.10s ease-out; }
-.canvas-zoom-wrap.zooming > canvas { transition:none; }
+/* Transform applied directly to #scan-canvas (no extra wrapper) so resize() sees the same
+   parent (.scan-card) as in v67 and the layout/sizing math is unchanged. */
+#scan-canvas { transform-origin:0 0; transition:transform 0.10s ease-out; }
+#scan-canvas.zooming { transition:none; }
 .zoom-controls { position:absolute; top:8px; right:8px; display:flex; gap:4px; z-index:30; }
 .zoom-controls button { width:30px; height:30px; border-radius:6px; border:1px solid var(--border2);
   background:rgba(22,27,34,0.85); color:var(--text); font-size:14px; font-weight:700; cursor:pointer;
@@ -1177,16 +1177,16 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
       <!-- v50 α1 — initial X label populated by resize()/loop, no more "—" -->
       <span id="tx-pos-label" style="color:var(--accent);font-size:10px;">X: 60 mm</span>
     </div>
-    <!-- v68 §211 IL — wrap the cross-section canvas so we can apply CSS zoom/pan transforms
-         to the canvas element itself while keeping HUD overlays (drag-hint, scan-hint) static. -->
-    <div class="canvas-zoom-wrap" id="canvas-zoom-wrap">
-      <canvas id="scan-canvas"></canvas>
-      <div class="zoom-controls" id="zoom-controls">
-        <button id="zoom-out" onclick="zoomCanvas(-1)" title="Zoom out">−</button>
-        <span class="zoom-readout" id="zoom-readout">100%</span>
-        <button id="zoom-in"  onclick="zoomCanvas(1)"  title="Zoom in">+</button>
-        <button id="zoom-reset" onclick="zoomReset()" title="Reset zoom &amp; pan">⟲</button>
-      </div>
+    <canvas id="scan-canvas"></canvas>
+    <!-- v68 §211 IL (fixed) — Zoom controls float over the canvas as an overlay; the canvas
+         itself receives the CSS transform (parent .scan-card already supplies overflow:hidden).
+         No new wrapper element so resize()'s `scanCanvas.parentElement.clientWidth` math is
+         identical to v67. Earlier wrapper caused canvas + ascan to collapse on some layouts. -->
+    <div class="zoom-controls" id="zoom-controls">
+      <button id="zoom-out" onclick="zoomCanvas(-1)" title="Zoom out">−</button>
+      <span class="zoom-readout" id="zoom-readout">100%</span>
+      <button id="zoom-in"  onclick="zoomCanvas(1)"  title="Zoom in">+</button>
+      <button id="zoom-reset" onclick="zoomReset()" title="Reset zoom &amp; pan">⟲</button>
     </div>
     <!-- v50 §16 L — First-time Drag-me chip, JS hides after first drag or 4s -->
     <div id="drag-hint" class="drag-hint-overlay" style="display:none; left:50%; top:42%;">👆 Drag the grey transducer along the surface</div>
@@ -6845,21 +6845,22 @@ function zoomCanvas(dir){
 }
 function zoomReset(){ _zoomScale = 1; _zoomTX = 0; _zoomTY = 0; _applyZoom(); }
 (function wireZoom(){
-  var wrap = document.getElementById('canvas-zoom-wrap'); if (!wrap) return;
-  // Touch: 2-finger pinch + pan. 1-finger passes through to the existing probe-drag listeners.
+  var canvas = document.getElementById('scan-canvas'); if (!canvas) return;
+  // Touch: 2-finger pinch + pan on the canvas itself. 1-finger touches pass through to the
+  // existing probe-drag listeners (which only act on touches.length === 1 paths internally).
   var pinchStartDist = 0, pinchStartScale = 1, pinchCx = 0, pinchCy = 0, panStartTX = 0, panStartTY = 0;
   function dist(t1,t2){ var dx=t1.clientX-t2.clientX, dy=t1.clientY-t2.clientY; return Math.sqrt(dx*dx+dy*dy); }
-  wrap.addEventListener('touchstart', function(e){
+  canvas.addEventListener('touchstart', function(e){
     if (e.touches.length !== 2) return;
     pinchStartDist  = dist(e.touches[0], e.touches[1]);
     pinchStartScale = _zoomScale;
     pinchCx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
     pinchCy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
     panStartTX = _zoomTX; panStartTY = _zoomTY;
-    wrap.classList.add('zooming');
+    canvas.classList.add('zooming');
     e.preventDefault();
   }, { passive:false });
-  wrap.addEventListener('touchmove', function(e){
+  canvas.addEventListener('touchmove', function(e){
     if (e.touches.length !== 2) return;
     var d  = dist(e.touches[0], e.touches[1]);
     var s  = pinchStartScale * (d / pinchStartDist);
@@ -6872,9 +6873,9 @@ function zoomReset(){ _zoomScale = 1; _zoomTX = 0; _zoomTY = 0; _applyZoom(); }
     _applyZoom();
     e.preventDefault();
   }, { passive:false });
-  wrap.addEventListener('touchend', function(){ wrap.classList.remove('zooming'); }, { passive:true });
-  // Desktop: Ctrl + wheel zoom.
-  wrap.addEventListener('wheel', function(e){
+  canvas.addEventListener('touchend', function(){ canvas.classList.remove('zooming'); }, { passive:true });
+  // Desktop: Ctrl + wheel zoom (over the canvas only).
+  canvas.addEventListener('wheel', function(e){
     if (!e.ctrlKey) return;
     var dir = e.deltaY < 0 ? 1 : -1;
     zoomCanvas(dir);
@@ -6882,10 +6883,10 @@ function zoomReset(){ _zoomScale = 1; _zoomTX = 0; _zoomTY = 0; _applyZoom(); }
   }, { passive:false });
   // Desktop: middle-click + drag pan.
   var panning = false, panSX = 0, panSY = 0;
-  wrap.addEventListener('mousedown', function(e){
+  canvas.addEventListener('mousedown', function(e){
     if (e.button !== 1) return;
     panning = true; panSX = e.clientX - _zoomTX; panSY = e.clientY - _zoomTY;
-    wrap.classList.add('zooming');
+    canvas.classList.add('zooming');
     e.preventDefault();
   });
   window.addEventListener('mousemove', function(e){
@@ -6893,7 +6894,7 @@ function zoomReset(){ _zoomScale = 1; _zoomTX = 0; _zoomTY = 0; _applyZoom(); }
     _zoomTX = e.clientX - panSX; _zoomTY = e.clientY - panSY; _applyZoom();
   });
   window.addEventListener('mouseup', function(e){
-    if (e.button === 1 && panning) { panning = false; wrap.classList.remove('zooming'); }
+    if (e.button === 1 && panning) { panning = false; canvas.classList.remove('zooming'); }
   });
 })();
 
@@ -6912,7 +6913,7 @@ if (typeof runSmokeTests === 'function') {
     if (typeof zoomCanvas     !== 'function')    probs.push('zoomCanvas missing (IL)');
     if (!document.getElementById('ex-splash-wrap')) probs.push('#ex-splash-wrap missing');
     if (!document.getElementById('mobile-bar'))     probs.push('#mobile-bar missing');
-    if (!document.getElementById('canvas-zoom-wrap'))probs.push('#canvas-zoom-wrap missing');
+    if (!document.getElementById('zoom-controls'))  probs.push('#zoom-controls missing');
     if (probs.length) console.warn('[v68 smoke]', probs);
   })();
 }
