@@ -279,7 +279,7 @@
 <meta charset="UTF-8">
 <!-- v50 α5 — removed user-scalable=no + maximum-scale to allow mobile pinch zoom -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>UT NDT Training Simulator — v67</title>
+<title>UT NDT Training Simulator — v68</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -730,18 +730,109 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
   .gw-cta { padding:8px 14px; font-size:11px; }
   .gw-result-value { font-size:17px; }
 }
+
+/* ──────────────────────── v68 §209 IJ — Dark / Light theme ──────────────────────── */
+/* Light theme overrides — projector / printer / classroom friendly. localStorage `ut_theme`. */
+:root.theme-light {
+  --bg:#f6f8fc; --surface:#ffffff; --surface2:#eef2f8; --surface3:#dde4ee;
+  --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18);
+  --text:#1a2230; --muted:#5d6878; --accent:#0a66c2;
+  --green:#1f8a3a; --green-dim:#dff5e3;
+  --red:#d6322a;   --red-dim:#fbe2e0;
+  --yellow:#a67400; --purple:#7a4dd1;
+  --orange:#cc7a00; --cyan:#0099b3;
+  --beam5:#cc7a00; --beam10:#0099b3;
+}
+.theme-toggle { font-family:'JetBrains Mono',monospace; font-size:10px; padding:3px 10px; border-radius:20px;
+  border:1px solid var(--border2); background:var(--surface); color:var(--text); cursor:pointer; user-select:none; transition:background 0.15s; }
+.theme-toggle:hover { background:var(--surface3); }
+
+/* ──────────────────── v68 §207 HT-1 — Lesson chip on EX button ──────────────────── */
+/* Adds a 🎓 chip to EX buttons that have a guided lesson available. EX2 currently. */
+.ex-btn { position:relative; }
+.ex-btn .lesson-chip { position:absolute; top:3px; right:4px; font-size:11px;
+  background:rgba(255,215,80,0.18); border:1px solid rgba(255,215,80,0.55); color:#ffd750;
+  border-radius:8px; padding:0 4px; line-height:13px; }
+.theme-light .ex-btn .lesson-chip { color:#a67400; background:rgba(255,200,40,0.20); }
+
+/* ──────────── v68 §207 HT-2 + §208 HU — EX entry split cards (Guided / Free play) ──────────── */
+.ex-splash { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+.ex-splash-card { display:flex; flex-direction:column; align-items:flex-start; gap:6px;
+  padding:14px 16px; border-radius:10px; border:1px solid var(--border2); background:var(--surface2);
+  color:var(--text); cursor:pointer; font-family:inherit; text-align:left; transition:all 0.15s; min-height:88px; }
+.ex-splash-card:hover { background:var(--surface3); transform:translateY(-1px); }
+.ex-splash-card.primary { border-color:var(--accent); background:rgba(88,166,255,0.10); box-shadow:0 0 0 1px rgba(88,166,255,0.25); }
+.ex-splash-card.primary:hover { background:rgba(88,166,255,0.16); }
+.ex-splash-card.disabled { opacity:0.55; cursor:not-allowed; }
+.ex-splash-card.disabled:hover { background:var(--surface2); transform:none; }
+.ex-splash-card .esc-icon { font-size:24px; line-height:1; }
+.ex-splash-card .esc-title { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; line-height:1.3; }
+.ex-splash-card .esc-sub { font-size:10px; color:var(--muted); line-height:1.4; }
+.ex-splash-card.primary .esc-title { color:var(--accent); }
+.ex-splash-card .esc-tag { display:inline-block; margin-top:auto; font-size:9px; padding:1px 6px; border-radius:8px;
+  background:rgba(255,255,255,0.08); color:var(--muted); }
+.ex-splash-card.primary .esc-tag { background:rgba(255,215,80,0.18); color:#ffd750; border:1px solid rgba(255,215,80,0.40); }
+.theme-light .ex-splash-card.primary .esc-tag { color:#a67400; }
+@keyframes pulse-card { 0%,100%{box-shadow:0 0 0 1px rgba(88,166,255,0.25);} 50%{box-shadow:0 0 0 3px rgba(88,166,255,0.50);} }
+.ex-splash-card.pulse { animation:pulse-card 1.8s ease-in-out 2; }
+@media (max-width:520px) { .ex-splash { grid-template-columns:1fr; } }
+
+/* ──────────────── v68 §207 HT-3 — First-time "Start here" floating arrow ──────────────── */
+.start-here-chip { position:absolute; top:-26px; left:50%; transform:translateX(-50%);
+  font-family:'JetBrains Mono',monospace; font-size:11px; padding:3px 10px; border-radius:14px;
+  background:#ffd750; color:#1a2230; font-weight:700; box-shadow:0 4px 12px rgba(0,0,0,0.4);
+  white-space:nowrap; pointer-events:none; animation:start-here-bob 0.9s ease-in-out infinite; z-index:10; }
+@keyframes start-here-bob { 0%,100%{transform:translateX(-50%) translateY(0);} 50%{transform:translateX(-50%) translateY(-4px);} }
+.start-here-chip.fadeout { transition:opacity 0.4s ease-out; opacity:0; }
+
+/* ──────────────────────── v68 §210 IK — Mobile sticky bottom action bar ──────────────────────── */
+/* Shown only on ≤ 640 px. 4 high-frequency buttons + context-aware EX5 extras. */
+.mobile-bar { display:none; position:fixed; left:0; right:0; bottom:0; z-index:80;
+  padding:8px 10px env(safe-area-inset-bottom, 10px); background:var(--surface);
+  border-top:1px solid var(--border2); gap:6px; justify-content:space-around;
+  box-shadow:0 -4px 16px rgba(0,0,0,0.35); }
+.theme-light .mobile-bar { box-shadow:0 -4px 16px rgba(0,0,0,0.10); }
+.mobile-bar button { flex:1; min-height:44px; font-family:'JetBrains Mono',monospace; font-size:11px;
+  font-weight:600; padding:6px 8px; border-radius:8px; border:1px solid var(--border2);
+  background:var(--surface2); color:var(--text); cursor:pointer; display:flex; flex-direction:column;
+  align-items:center; gap:2px; line-height:1.1; }
+.mobile-bar button .mbb-icon { font-size:16px; }
+.mobile-bar button.primary { border-color:var(--accent); background:rgba(88,166,255,0.15); color:var(--accent); }
+.mobile-bar button:active { transform:scale(0.96); }
+@media (max-width:640px) {
+  .mobile-bar { display:flex; }
+  body { padding-bottom:78px; }
+}
+
+/* ──────────────────────── v68 §211 IL — Canvas pinch-zoom + drag-pan ──────────────────────── */
+/* Wraps #scan-canvas in a frame. Apply CSS transform to the canvas while UI overlays stay still. */
+.canvas-zoom-wrap { position:relative; overflow:hidden; }
+.canvas-zoom-wrap > canvas { transform-origin:0 0; transition:transform 0.10s ease-out; }
+.canvas-zoom-wrap.zooming > canvas { transition:none; }
+.zoom-controls { position:absolute; top:8px; right:8px; display:flex; gap:4px; z-index:30; }
+.zoom-controls button { width:30px; height:30px; border-radius:6px; border:1px solid var(--border2);
+  background:rgba(22,27,34,0.85); color:var(--text); font-size:14px; font-weight:700; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; user-select:none; }
+.theme-light .zoom-controls button { background:rgba(255,255,255,0.85); }
+.zoom-controls button:hover { background:var(--surface3); }
+.zoom-controls .zoom-readout { padding:0 8px; font-family:'JetBrains Mono',monospace; font-size:10px;
+  color:var(--muted); display:flex; align-items:center; background:rgba(22,27,34,0.65);
+  border-radius:6px; border:1px solid var(--border); }
+.theme-light .zoom-controls .zoom-readout { background:rgba(255,255,255,0.65); }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v67</span></h1>
+  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v68</span></h1>
   <span class="badge">Pulse-Echo</span>
   <span class="badge" id="freq-badge">5 MHz</span>
   <span class="badge ok" id="ex-badge">Exercise 1</span>
   <span class="mode-toggle basic" id="mode-toggle" onclick="toggleMode()" title="Toggle BASIC / ADVANCED display mode">MODE: BASIC</span>
   <!-- v51 §32 AC — TUTORIAL ↔ QUIZ mode toggle. QUIZ hides all hints/details/disclaimers/teach-banner. -->
   <span class="mode-toggle basic" id="learn-mode-toggle" onclick="toggleLearnMode()" title="TUTORIAL shows all hints; QUIZ hides them for self-assessment">MODE: TUTORIAL</span>
+  <!-- v68 §209 IJ — Dark / Light theme toggle. localStorage `ut_theme`. -->
+  <span class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle dark / light theme — light theme is projector / print / classroom friendly">🌙 Dark</span>
 </div>
 
 <!-- v50 §22 S + v51 §29 Z — Color legend chip; populated dynamically per current EX. -->
@@ -759,6 +850,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
     <span class="ex-num">EX 01</span><span class="ex-name">Resolution</span>
   </button>
   <button class="ex-btn" id="btn-pen" onclick="setExercise('penetration')">
+    <!-- v68 §207 HT-1 — lesson chip flags an EX with a guided 5-step walkthrough. -->
+    <span class="lesson-chip" title="This exercise has a 5-step guided lesson">🎓</span>
     <span class="ex-num">EX 02</span><span class="ex-name">Penetration</span>
   </button>
   <button class="ex-btn" id="btn-weld" onclick="setExercise('weld')">
@@ -862,6 +955,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
   <button class="skew-btn"        id="wedge-60" onclick="setWedge(60)" title="60° wedge — all-purpose welding inspection. ISO 17640 standard.">60°<br><span style="font-size:9px;opacity:.7">all-purpose</span></button>
   <button class="skew-btn"        id="wedge-70" onclick="setWedge(70)" title="70° wedge — thin sections, approaches 2nd critical angle (78°)">70°<br><span style="font-size:9px;opacity:.7">thin sect.</span></button>
 </div>
+
+<!-- v68 §207 HT-2 + §208 HU — Per-EX entry split cards (Guided lesson / Free play). Sibling of
+     #ex-desc so it survives setExercise's innerHTML rewrite. Hidden when gw.open() is active. -->
+<div id="ex-splash-wrap" style="position:relative;"></div>
 
 <div class="ex-desc steps" id="ex-desc">
   <strong>EX 01 · Frequency vs Resolution</strong>
@@ -1080,7 +1177,17 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
       <!-- v50 α1 — initial X label populated by resize()/loop, no more "—" -->
       <span id="tx-pos-label" style="color:var(--accent);font-size:10px;">X: 60 mm</span>
     </div>
-    <canvas id="scan-canvas"></canvas>
+    <!-- v68 §211 IL — wrap the cross-section canvas so we can apply CSS zoom/pan transforms
+         to the canvas element itself while keeping HUD overlays (drag-hint, scan-hint) static. -->
+    <div class="canvas-zoom-wrap" id="canvas-zoom-wrap">
+      <canvas id="scan-canvas"></canvas>
+      <div class="zoom-controls" id="zoom-controls">
+        <button id="zoom-out" onclick="zoomCanvas(-1)" title="Zoom out">−</button>
+        <span class="zoom-readout" id="zoom-readout">100%</span>
+        <button id="zoom-in"  onclick="zoomCanvas(1)"  title="Zoom in">+</button>
+        <button id="zoom-reset" onclick="zoomReset()" title="Reset zoom &amp; pan">⟲</button>
+      </div>
+    </div>
     <!-- v50 §16 L — First-time Drag-me chip, JS hides after first drag or 4s -->
     <div id="drag-hint" class="drag-hint-overlay" style="display:none; left:50%; top:42%;">👆 Drag the grey transducer along the surface</div>
     <div class="scan-hint">👆 Drag the transducer (the grey block) along the surface ←→</div>
@@ -4823,6 +4930,10 @@ function setExercise(ex) {
   }
   // v51 §25 V — Wire up step unlock on drag (resets on EX switch via dragMoveSinceEx=0 in setExercise)
   unlockStepsIfDragged();
+  // v68 §207 HT-2 + §208 HU — render entry split cards above the steps for every EX.
+  // Hidden when a guided flow is already running (gw.flowId !== null). HT-3 floating
+  // "Start here" arrow attaches inside if it's the student's first EX2 visit this session.
+  if (typeof _renderExSplash === 'function') _renderExSplash(ex);
   // EX04 needs explicit HUD setup since drawAscan early-returns before HUD block
   if (ex==='grating') {
     document.getElementById('ex-badge').className = 'badge ok';
@@ -5206,7 +5317,7 @@ function exportScanPlan(){
   md += '- **Display mode:** ' + (advancedMode ? 'ADVANCED' : 'BASIC') + ' / ' + learnMode.toUpperCase() + '\n';
   md += '- **Probe position X:** ' + Math.round((txX-MAT_X)/MAT_W*240) + ' mm\n';
   md += '- **Sound-path range:** 0..200 mm\n';
-  md += '- **Generated by:** UT NDT Trainer v67\n';
+  md += '- **Generated by:** UT NDT Trainer v68\n';
   // v59 §99 CX — append Corrosion Maze score if a round has been revealed.
   if (mazeScore) {
     var hrPct = (mazeScore.hitRate*100).toFixed(0);
@@ -5505,6 +5616,8 @@ var gw = {
     var exDesc = document.getElementById('ex-desc');         if (exDesc) exDesc.style.display = 'none';
     var fs     = document.getElementById('findings-sheet');  if (fs) fs.style.display = 'none';
     var panel  = document.getElementById('gw-panel');        if (panel) panel.hidden = false;
+    // v68 §207 HT-2 — also hide the splash cards while the guided flow is active.
+    var splash = document.getElementById('ex-splash-wrap');  if (splash) splash.style.display = 'none';
     this.render();
     if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior:'smooth', block:'start' });
   },
@@ -5514,6 +5627,9 @@ var gw = {
     var panel  = document.getElementById('gw-panel');        if (panel) panel.hidden = true;
     var exDesc = document.getElementById('ex-desc');         if (exDesc) exDesc.style.display = '';
     var fs     = document.getElementById('findings-sheet');  if (fs) fs.style.display = '';
+    // v68 §207 HT-2 — when the flow closes (e.g. "Try again" / "Close"), re-render the
+    // splash so the student sees the entry choice again rather than landing on bare steps.
+    if (typeof _renderExSplash === 'function') _renderExSplash(exercise);
   },
 
   back: function(){
@@ -6384,10 +6500,11 @@ if (savedMode === 'quiz') {
 // runSmokeTests audits that each code appears as a `§N XX —` comment in the page
 // HTML (proves the touch point is tagged); missing codes log a banner warning.
 var __VERSION_DELTA__ = Object.freeze({
-  version: 'v67',
-  // v67 ships 3 D-area rules (HQ beam-visual, HR Guided Walkthrough framework, HS 6 dB drop
-  // guided exercise). Smoke asserts ruleCodes.length matches this ship's adopted count.
-  ruleCodes: ['HQ','HR','HS']
+  version: 'v68',
+  // v68 ships 5 rules — HT (EX teaching-entry exposure 3-piece kit), HU (all-EX entry split
+  // cards), IJ (Dark/Light theme), IK (mobile sticky bottom bar), IL (canvas pinch-zoom +
+  // drag-pan). Smoke asserts ruleCodes.length matches this ship's adopted count.
+  ruleCodes: ['HT','HU','IJ','IK','IL']
 });
 // v66 §196 GQ — the rule-code audit serialises the whole document (innerHTML) and regex-tests
 // each code. The HTML never changes after load, so cache the result and skip the expensive
@@ -6449,7 +6566,7 @@ function runSmokeTests(){
   ok('__VERSION_DELTA__ frozen', Object.isFrozen(__VERSION_DELTA__));
   // v66 §200 GU — the hand-maintained ruleCodes list must match the count of rules adopted
   // for this ship. v67 adopts 3 D-area rules (HQ/HR/HS); update this expected count per ship.
-  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 3, __VERSION_DELTA__.ruleCodes.length);
+  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 5, __VERSION_DELTA__.ruleCodes.length);
   // v67 §205 HR — guided-walkthrough framework is wired to window.gw with the expected API.
   ok('gw.open exposed',         typeof window.gw === 'object' && typeof window.gw.open === 'function');
   ok('gw close/back/submit',    typeof window.gw.close === 'function' && typeof window.gw.back === 'function' && typeof window.gw.submit === 'function');
@@ -6543,6 +6660,262 @@ if (typeof runSmokeTests === 'function' && location.search.indexOf('nosmoke') ==
   }
 }
 loop();
+
+// v68 §210 IK — Mobile sticky bottom bar HTML node. Visibility gated by @media (≤ 640px).
+(function injectMobileBar(){
+  if (document.getElementById('mobile-bar')) return;
+  var bar = document.createElement('div');
+  bar.id = 'mobile-bar'; bar.className = 'mobile-bar';
+  document.body.appendChild(bar);
+})();
+
+// ────────────────────────────────────────────────────────────────────────────────
+// v68 §207 HT — EX teaching-entry exposure (chip + split cards + first-time arrow)
+// v68 §208 HU — Pattern extends to all EX. Non-EX2 guided cards are disabled w/ "coming"
+//              tag so the visual structure stays consistent and signals future lessons.
+// ────────────────────────────────────────────────────────────────────────────────
+var _EX_LESSON_MAP = {
+  // ex → { flowId, title, sub } if guided lesson exists; null → disabled "coming" card.
+  resolution:  null,
+  penetration: { flowId:'6db-sizing', title:'Guided · 6 dB Drop Sizing', sub:'5-step walkthrough · recreates the Teachable lesson video' },
+  weld:        null,
+  grating:     null,
+  maze:        null
+};
+var _EX_FREE_PLAY_SUB = {
+  resolution:  'Count the P peaks at 5 vs 10 MHz · free probe drag',
+  penetration: 'All sizing tools (6 dB / DGS / Findings / DAC CAL) available',
+  weld:        'Try every skew × wedge × V1 cal · free probe drag',
+  grating:     'Sweep pitch + N elements · watch grating lobes',
+  maze:        'Pick difficulty + drop markers on thin spots'
+};
+function _renderExSplash(ex){
+  var wrap = document.getElementById('ex-splash-wrap'); if (!wrap) return;
+  // When a guided flow is mid-stream, the splash stays hidden until close().
+  if (typeof gw !== 'undefined' && gw && gw.flowId) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  wrap.style.display = '';
+  var lesson  = _EX_LESSON_MAP[ex] || null;
+  var freeSub = _EX_FREE_PLAY_SUB[ex] || 'Explore freely with all tools';
+  var guidedDisabled = !lesson;
+  var guidedTitle    = lesson ? lesson.title : 'Guided lesson — coming soon';
+  var guidedSub      = lesson ? lesson.sub   : 'Will land in v69+ · pattern already in place';
+  var guidedTag      = lesson ? '<span class="esc-tag">📚 LESSON · 5 steps</span>' : '<span class="esc-tag">coming v69</span>';
+  // Pulse the primary card on entries that have a lesson AND the student hasn't dismissed
+  // the splash for this EX in this session (so returning visitors don't see a constant pulse).
+  var sessKey = 'ut_ex_splash_seen_' + ex;
+  var alreadySeen = (typeof safeSSGet === 'function') ? safeSSGet(sessKey, '') === '1' : false;
+  var pulseClass = (lesson && !alreadySeen) ? ' pulse' : '';
+  var disabledClass = guidedDisabled ? ' disabled' : ' primary';
+  wrap.innerHTML =
+    '<div class="ex-splash">' +
+      '<button class="ex-splash-card' + disabledClass + pulseClass + '" ' +
+              'onclick="_pickExSplash(\'guided\',\'' + ex + '\')"' +
+              (guidedDisabled ? ' disabled' : '') + '>' +
+        '<span class="esc-icon">📚</span>' +
+        '<div class="esc-title">' + guidedTitle + '</div>' +
+        '<div class="esc-sub">' + guidedSub + '</div>' +
+        guidedTag +
+      '</button>' +
+      '<button class="ex-splash-card" onclick="_pickExSplash(\'free\',\'' + ex + '\')">' +
+        '<span class="esc-icon">⚙️</span>' +
+        '<div class="esc-title">Free play</div>' +
+        '<div class="esc-sub">' + freeSub + '</div>' +
+        '<span class="esc-tag">🔧 all tools</span>' +
+      '</button>' +
+    '</div>';
+  // v68 §207 HT-3 — first-time EX2 visitor gets a bobbing "Start here" arrow above the
+  // primary card. sessionStorage key `ut_ex2_seen_lesson`; cleared on either card click.
+  if (ex === 'penetration' && typeof safeSSGet === 'function' && safeSSGet('ut_ex2_seen_lesson','') !== '1') {
+    setTimeout(function(){
+      var primary = wrap.querySelector('.ex-splash-card.primary');
+      if (!primary) return;
+      var chip = document.createElement('div');
+      chip.className = 'start-here-chip'; chip.id = 'ex2-start-here-chip';
+      chip.textContent = '👇 Start here';
+      primary.style.position = 'relative';
+      primary.appendChild(chip);
+      setTimeout(function(){
+        chip.classList.add('fadeout');
+        setTimeout(function(){ if (chip.parentNode) chip.parentNode.removeChild(chip); }, 450);
+      }, 4000);
+    }, 800);
+  }
+}
+function _pickExSplash(choice, ex){
+  // Clear first-time arrow / mark splash seen for this EX.
+  var chip = document.getElementById('ex2-start-here-chip'); if (chip && chip.parentNode) chip.parentNode.removeChild(chip);
+  if (typeof safeSSSet === 'function') {
+    if (ex === 'penetration') safeSSSet('ut_ex2_seen_lesson', '1');
+    safeSSSet('ut_ex_splash_seen_' + ex, '1');
+  }
+  if (choice === 'guided') {
+    var lesson = _EX_LESSON_MAP[ex];
+    if (lesson && typeof gw !== 'undefined' && gw.open) gw.open(lesson.flowId);
+  } else {
+    // Free play — just hide the splash, leave the step list visible.
+    var wrap = document.getElementById('ex-splash-wrap'); if (wrap) wrap.style.display = 'none';
+  }
+}
+// First render (on initial page load, after setExercise('resolution') ran above).
+if (typeof _renderExSplash === 'function') _renderExSplash(exercise);
+
+// _renderExSplash is also the canonical "EX-just-changed" hook for v68. Anything else that
+// must refresh on EX switch (e.g. the IK mobile bar) hangs off it via _onExChanged().
+function _onExChanged(){ if (typeof _renderMobileBar === 'function') _renderMobileBar(); }
+(function patchSetExerciseForExChanged(){
+  var orig = setExercise;
+  // Reassign the global function reference so inline onclick="setExercise(...)" picks up
+  // the wrapper. Function declarations live on window in non-module scripts.
+  window.setExercise = function(ex){ orig.call(window, ex); _onExChanged(); };
+})();
+
+// ────────────────────────────────────────────────────────────────────────────────
+// v68 §209 IJ — Dark / Light theme toggle. Persists via localStorage `ut_theme`.
+// ────────────────────────────────────────────────────────────────────────────────
+function toggleTheme(){
+  var root  = document.documentElement;
+  var isLit = root.classList.toggle('theme-light');
+  if (typeof safeLSSet === 'function') safeLSSet('ut_theme', isLit ? 'light' : 'dark');
+  var btn = document.getElementById('theme-toggle'); if (btn) btn.textContent = isLit ? '☀️ Light' : '🌙 Dark';
+}
+(function applyInitialTheme(){
+  var saved = (typeof safeLSGet === 'function') ? safeLSGet('ut_theme', 'dark', 'string') : 'dark';
+  if (saved === 'light') {
+    document.documentElement.classList.add('theme-light');
+    var btn = document.getElementById('theme-toggle'); if (btn) btn.textContent = '☀️ Light';
+  }
+})();
+
+// ────────────────────────────────────────────────────────────────────────────────
+// v68 §210 IK — Mobile sticky bottom action bar. 4 buttons; EX5 swaps the middle two
+// to maze-specific actions. The bar's CSS visibility is media-query gated (≤ 640 px).
+// ────────────────────────────────────────────────────────────────────────────────
+function _renderMobileBar(){
+  var bar = document.getElementById('mobile-bar'); if (!bar) return;
+  var ex  = exercise;
+  var hasLesson = !!_EX_LESSON_MAP[ex];
+  var lessonBtn = hasLesson
+    ? '<button class="primary" onclick="_mbLesson()" title="Start the guided lesson for this EX"><span class="mbb-icon">🎓</span>Guided</button>'
+    : '<button onclick="_mbCycleEx()" title="Cycle to the next exercise"><span class="mbb-icon">➡️</span>Next EX</button>';
+  if (ex === 'maze') {
+    bar.innerHTML =
+      '<button onclick="resetExercise()"><span class="mbb-icon">↺</span>Reset</button>' +
+      '<button onclick="dropMazeMarker()"><span class="mbb-icon">📍</span>Drop</button>' +
+      '<button onclick="revealMaze()"><span class="mbb-icon">👁</span>Reveal</button>' +
+      '<button onclick="_mbCycleEx()" title="Cycle to the next exercise"><span class="mbb-icon">➡️</span>Next EX</button>';
+  } else {
+    bar.innerHTML =
+      '<button onclick="resetExercise()"><span class="mbb-icon">↺</span>Reset</button>' +
+      lessonBtn +
+      '<button onclick="toggleMoreTools()"><span class="mbb-icon">🔧</span>Tools</button>' +
+      '<button onclick="_mbCycleEx()" title="Cycle to the next exercise"><span class="mbb-icon">➡️</span>Next EX</button>';
+  }
+}
+function _mbLesson(){
+  var lesson = _EX_LESSON_MAP[exercise]; if (!lesson) return;
+  if (typeof gw !== 'undefined' && gw.open) gw.open(lesson.flowId);
+}
+function _mbCycleEx(){
+  var order = ['resolution','penetration','weld','grating','maze'];
+  var i = order.indexOf(exercise); var next = order[(i + 1) % order.length];
+  setExercise(next);
+}
+_renderMobileBar();
+
+// Belt-and-braces: refresh once now in case earlier hook didn't fire.
+_renderMobileBar();
+
+// ────────────────────────────────────────────────────────────────────────────────
+// v68 §211 IL — Canvas pinch-zoom + drag-pan on #scan-canvas via its wrap.
+// 1-finger touch / mouse goes through to the existing probe-drag (untouched).
+// 2-finger pinch on touch devices = scale; 2-finger drag = pan.
+// Desktop:  Ctrl + wheel = zoom; middle-click + drag = pan; ⟲ button resets.
+// ────────────────────────────────────────────────────────────────────────────────
+var _zoomScale = 1, _zoomTX = 0, _zoomTY = 0;
+var _ZOOM_MIN = 1, _ZOOM_MAX = 4, _ZOOM_STEP = 0.25;
+function _applyZoom(){
+  var canvas = document.getElementById('scan-canvas'); if (!canvas) return;
+  canvas.style.transform = 'translate(' + _zoomTX + 'px,' + _zoomTY + 'px) scale(' + _zoomScale + ')';
+  var ro = document.getElementById('zoom-readout'); if (ro) ro.textContent = Math.round(_zoomScale * 100) + '%';
+}
+function zoomCanvas(dir){
+  _zoomScale = Math.max(_ZOOM_MIN, Math.min(_ZOOM_MAX, _zoomScale + dir * _ZOOM_STEP));
+  if (_zoomScale === _ZOOM_MIN) { _zoomTX = 0; _zoomTY = 0; }
+  _applyZoom();
+}
+function zoomReset(){ _zoomScale = 1; _zoomTX = 0; _zoomTY = 0; _applyZoom(); }
+(function wireZoom(){
+  var wrap = document.getElementById('canvas-zoom-wrap'); if (!wrap) return;
+  // Touch: 2-finger pinch + pan. 1-finger passes through to the existing probe-drag listeners.
+  var pinchStartDist = 0, pinchStartScale = 1, pinchCx = 0, pinchCy = 0, panStartTX = 0, panStartTY = 0;
+  function dist(t1,t2){ var dx=t1.clientX-t2.clientX, dy=t1.clientY-t2.clientY; return Math.sqrt(dx*dx+dy*dy); }
+  wrap.addEventListener('touchstart', function(e){
+    if (e.touches.length !== 2) return;
+    pinchStartDist  = dist(e.touches[0], e.touches[1]);
+    pinchStartScale = _zoomScale;
+    pinchCx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    pinchCy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    panStartTX = _zoomTX; panStartTY = _zoomTY;
+    wrap.classList.add('zooming');
+    e.preventDefault();
+  }, { passive:false });
+  wrap.addEventListener('touchmove', function(e){
+    if (e.touches.length !== 2) return;
+    var d  = dist(e.touches[0], e.touches[1]);
+    var s  = pinchStartScale * (d / pinchStartDist);
+    _zoomScale = Math.max(_ZOOM_MIN, Math.min(_ZOOM_MAX, s));
+    var cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    var cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    _zoomTX = panStartTX + (cx - pinchCx);
+    _zoomTY = panStartTY + (cy - pinchCy);
+    if (_zoomScale === _ZOOM_MIN) { _zoomTX = 0; _zoomTY = 0; }
+    _applyZoom();
+    e.preventDefault();
+  }, { passive:false });
+  wrap.addEventListener('touchend', function(){ wrap.classList.remove('zooming'); }, { passive:true });
+  // Desktop: Ctrl + wheel zoom.
+  wrap.addEventListener('wheel', function(e){
+    if (!e.ctrlKey) return;
+    var dir = e.deltaY < 0 ? 1 : -1;
+    zoomCanvas(dir);
+    e.preventDefault();
+  }, { passive:false });
+  // Desktop: middle-click + drag pan.
+  var panning = false, panSX = 0, panSY = 0;
+  wrap.addEventListener('mousedown', function(e){
+    if (e.button !== 1) return;
+    panning = true; panSX = e.clientX - _zoomTX; panSY = e.clientY - _zoomTY;
+    wrap.classList.add('zooming');
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', function(e){
+    if (!panning) return;
+    _zoomTX = e.clientX - panSX; _zoomTY = e.clientY - panSY; _applyZoom();
+  });
+  window.addEventListener('mouseup', function(e){
+    if (e.button === 1 && panning) { panning = false; wrap.classList.remove('zooming'); }
+  });
+})();
+
+// ────────────────────────────────────────────────────────────────────────────────
+// v68 smoke asserts — confirm the 5 new feature seams are reachable.
+// ────────────────────────────────────────────────────────────────────────────────
+if (typeof runSmokeTests === 'function') {
+  // Don't re-run; just register the new asserts by extending the smoke set is non-trivial
+  // (the test list lives inside the function body). Instead, ad-hoc verify here and warn
+  // visibly if anything is missing. Cheap and self-contained.
+  (function v68SmokeExtras(){
+    var probs = [];
+    if (typeof _renderExSplash !== 'function')   probs.push('_renderExSplash missing (HT/HU)');
+    if (typeof toggleTheme    !== 'function')    probs.push('toggleTheme missing (IJ)');
+    if (typeof _renderMobileBar !== 'function')  probs.push('_renderMobileBar missing (IK)');
+    if (typeof zoomCanvas     !== 'function')    probs.push('zoomCanvas missing (IL)');
+    if (!document.getElementById('ex-splash-wrap')) probs.push('#ex-splash-wrap missing');
+    if (!document.getElementById('mobile-bar'))     probs.push('#mobile-bar missing');
+    if (!document.getElementById('canvas-zoom-wrap'))probs.push('#canvas-zoom-wrap missing');
+    if (probs.length) console.warn('[v68 smoke]', probs);
+  })();
+}
 </script>
 </body>
 </html>
