@@ -1147,14 +1147,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
     <div><span class="dot dot-t"></span>T — initial pulse / dead zone</div>
     <div><span class="dot dot-d"></span>D — defect echo</div>
     <div><span class="dot dot-b"></span>B — back wall echo</div>
-    <!-- v52 §39 AJ — Vault glossary link. Works for the owner with Obsidian + Vault; harmless no-op otherwise. -->
-    <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">
-      <a href="obsidian://open?vault=Obsidian%20Vault&file=wiki%2Fndt-bilingual-glossary"
-         id="vault-glossary-link"
-         onclick="onVaultLinkClick(event)"
-         style="font-size:10px;color:var(--accent);text-decoration:none;cursor:pointer;">📖 Open NDT bilingual glossary (Vault)</a>
-      <div style="font-size:8px;color:var(--muted);margin-top:2px;">~150 中英對照 · opens in Obsidian if installed</div>
-    </div>
+    <!-- v52 §39 AJ — Vault glossary link removed per user 2026-05-29 EDT. -->
   </div>
   <div class="info-cell">
     <div class="ic-title" id="freq-info-title">CURRENT BEHAVIOUR</div>
@@ -5727,22 +5720,8 @@ var GW_FLOWS = {
     ]
   }
 };
-// v52 §39 AJ — Vault glossary link handler. Tries obsidian:// first, falls back to
-// copying the path to clipboard so other viewers (no Obsidian) can still find the doc.
-function onVaultLinkClick(e){
-  // Let the native obsidian:// scheme attempt to fire first (browser will silently no-op if unhandled).
-  // After 600ms, regardless of success, also copy the local file path to clipboard for fallback.
-  setTimeout(function(){
-    var path = 'C:\\Users\\Jun zhi-PC\\Documents\\Obsidian Vault\\wiki\\ndt-bilingual-glossary.md';
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(path);
-        showToast('📋 Glossary path copied to clipboard (fallback if Obsidian did not open)', 2800);
-      }
-    } catch(err){ /* clipboard blocked — silent */ }
-  }, 600);
-  // do NOT preventDefault — we want the obsidian:// nav to happen
-}
+// v52 §39 AJ — onVaultLinkClick removed per user 2026-05-29 EDT (the link itself was removed
+// from the info-grid; no callers remain).
 // v50 §18 N — toast helper for transient hints.
 // v51 §35 AF — slotEl can be 'side-panels' to anchor above EX04 reveal (or default body bottom).
 function showToast(text, ms, anchor){
