@@ -6691,6 +6691,13 @@ var _EX_FREE_PLAY_SUB = {
 };
 function _renderExSplash(ex){
   var wrap = document.getElementById('ex-splash-wrap'); if (!wrap) return;
+  // v68 hotfix #2 — _renderExSplash is a function declaration so it gets hoisted; the
+  // typeof check inside setExercise() therefore passes during the *first* setExercise call
+  // at script-load time. But _EX_LESSON_MAP is a `var`, hoisted as undefined and only
+  // *initialised* further down the script. Accessing _EX_LESSON_MAP[ex] before that line
+  // throws "Cannot read properties of undefined (reading 'resolution')" and halts the page
+  // before loop() draws either canvas. Guard against the pre-init call.
+  if (typeof _EX_LESSON_MAP === 'undefined' || !_EX_LESSON_MAP) return;
   // When a guided flow is mid-stream, the splash stays hidden until close().
   if (typeof gw !== 'undefined' && gw && gw.flowId) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
   wrap.style.display = '';
