@@ -668,6 +668,35 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 
 
 
+（以下規則 212\~216 由使用者於 2026-05-31 EDT「OK 開始 v69」採納重寫後的建議書 v69 起手清單後納入。v69 ship 範圍 = B1 + B2 + B3 + A1 + A2 = 5 條。老闆方向:教學工具全砍、學生視角遊玩 + 程式圓滑為主、按鈕加 ☰ 漢堡選單、每 EX 只顯示該 EX 該有的、工程師建議改為視覺圓滑(物理 / 陰影 / 反射 fade-out)。)
+
+
+
+212\. 【B1 · ☰ Hamburger 主選單抽屜】header 加 `<span class="hamburger-btn" id="hamburger-btn">☰</span>`,點開右側滑入抽屜(width:min(340px,86vw))。抽屜內容 = 5 個分類 details(Probe / Calibration / Sizing / Tools / Settings),items 從 `_HD_REGISTRY` 動態 render,**只列當前 EX 用得到的**(`exs:'penetration,weld'` 之類)。注入 DOM 走 runtime IIFE,不動 body layout。按 ✕ / backdrop / ESC 都關。每次 EX 變化 + 開啟時都重 render → 學生切 EX 抽屜內容自動跟著換。底列 (IK) 之前「🔧 Tools」按鈕改成「☰ Menu」開抽屜。
+
+213\. 【B2 · per-EX 上下文 UI 過濾】`_EX_HIDE_MAP`(每 EX → 要 hide 的 selector 陣列)+ `_applyExFilter(ex)` 在 setExercise 內走一遍,符合的元素加 `data-ex-hidden="1"` attribute,CSS `[data-ex-hidden="1"] { display:none !important; }` 隱藏。掛在 v68 的 `_onExChanged` seam(reassign 而非另開包裝層,避免 wrapping 堆疊)。**現有的 per-EX 顯隱(skew-bar / wedge-bar / pitch-row / maze-controls / dac-cal-btn / vel-cal-btn / cal-wizard-btn / v1-cal-btn 各自的 EX 條件)保留 → B2 不重複處理**,只額外處理之前一直 visible 但其實 EX 不相關的(EX01 / EX04 / EX05 的 sizing / DGS / sens / DAC CAL / VEL CAL / cal-wizard / V1;EX03 的 DAC CAL / VEL CAL / cal-wizard;EX05 的 PEAK HOLD / DAC cell)。
+
+214\. 【B3 · More tools 收編進 ☰】v56 的「🔧 More tools」摺疊機制(點按鈕展開 `#tools-panel` 橫列)拆解:
+  - CSS `#more-tools-toggle { display:none !important; }` 直接隱藏按鈕
+  - `.controls-row.tools-panel { display:flex !important; }` 強制 tools-panel 永遠可見
+  - 但 tools-panel 內部 buttons 經 B2 per-EX 過濾 → 該 EX 用不到的自動 disappear
+  - 結果 = 不再多一個外露的按鈕,使用者體驗 = 「想要的工具自己出現,☰ 內有全套」
+
+215\. 【A1 · 缺陷反射逐漸削弱(smoothstep edge fade)】CLAUDE.md §1 規定 BW 線性比例衰減,使用者 2026-05-31 EDT 明示**反射的逐漸削弱也要對 defect peak 本身生效,而不是只到底波**。v69 改:
+  - `_signalForSdh()` 拿掉 `if (overlap < 0.005) return 0` 硬閾值,改用 smoothstep `3x²−2x³` 對 overlap 做平滑(端點斜率為 0,完全無 pop-in / pop-out)
+  - `getCrackEcho()` 對 lateral-reach falloff `ov = 1 − dx/lateralReach` 也套 smoothstep
+  - 既有 §6 EJ 的高斯取向衰減保持不變,A1 只解決「空間邊緣」這一維度的硬切感
+  - 對使用者視覺 = 探頭橫向移過缺陷時,peak 像呼吸一樣慢慢長出又慢慢退掉,而不是 binary 0/1 切換
+
+216\. 【A2 · radial-gradient 陰影(探頭 + 缺陷)】drawScan 在繪 transducer 之前,新增 `_drawV69Shadows()` IIFE:
+  - 探頭下方畫橢圓 radial gradient(rx=TX_W×0.95,ry≈3px,alpha 0~0.22),用 ctx.scale 壓扁成橢圓
+  - 缺陷(EX01 的 PORE_PATTERN 5 點 / EX02 的 4 個 SDH)各畫一個半徑 r×1.6 的小陰影(alpha 0~0.20,壓扁 0.40)
+  - 視覺給工件加深度感,呼應老闆「程式更圓滑更完美」要求
+  - alpha 嚴格 ≤ 0.22 → 不會競爭 beam 視覺(per CLAUDE.md §4 視覺重點在 beam)
+  - 只在 EX01 / EX02 / EX03 / EX04(标準探頭視圖) 啟用,EX05 maze 因為俯視 paradigm 不適用,函式內以 exercise 過濾
+
+
+
 遠端開發生產與「模糊歷史掃描」規範（加拿大時間基準）
 
 

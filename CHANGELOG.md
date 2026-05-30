@@ -10,6 +10,64 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ---
 
+## v69 — 2026-05-31 EDT
+
+**Trigger:** user "OK 開始 v69" after the proposal book was rewritten per the boss's 2026-05-31 directive (drop teacher tools, focus on student gameplay + program smoothness, add hamburger menu, per-EX contextual UI, dev-lens items become visible physics polish). Scope = B1 + B2 + B3 + A1 + A2 = 5 features. Remaining Lane A items (A3–A9), Lane B is now done, Lane C content queued v70 onward.
+
+### New rules (CLAUDE.md §212–§216)
+
+| §   | Code | Theme              | One-liner |
+|-----|------|--------------------|-----------|
+| 212 | B1   | UI architecture    | ☰ hamburger drawer (right-slide) — every secondary control categorised + EX-filtered |
+| 213 | B2   | UI architecture    | Per-EX contextual control filter (`_EX_HIDE_MAP` + `_applyExFilter`) hides irrelevant rows |
+| 214 | B3   | UI architecture    | More-tools toggle absorbed — tools-panel always visible, filtered by B2; legacy button hidden |
+| 215 | A1   | Physics smoothness | Defect echo edge-fade replaces hard 0.005 clip with smoothstep(3x²−2x³) — no pop-in / pop-out |
+| 216 | A2   | Visual smoothness  | Radial-gradient shadows under probe + each visible defect (EX01–EX04) — depth without competing with beam |
+
+### New / modified functions
+
+- `openHamburger()` / `closeHamburger()` / `_renderHamburger()` — B1 drawer open / close / EX-aware item render
+- `injectHamburgerDOM()` IIFE — B1 backdrop + drawer DOM injection
+- `_HD_REGISTRY` (frozen) + `_HD_SECTIONS` — B1 single source of truth for every control's `{ section, label, exs, onClick, title? }`
+- `_EX_HIDE_MAP` + `_applyExFilter(ex)` — B2 contextual filter
+- `_onExChanged` reassigned — preserves v68 mobile bar refresh + adds B2 filter pass per EX switch
+- `_signalForSdh` — A1 smoothstep replacement of hard 0.005 cut-off
+- `getCrackEcho` — A1 smoothstep applied to lateral-reach falloff `ov`
+- `drawScan` (anonymous `_drawV69Shadows` IIFE inserted before transducer fill) — A2 radial-gradient shadow under probe + each defect
+- `runSmokeTests` — `ruleCodes.length === 5` preserved; new assert `ruleCodes.join(',') === 'B1,B2,B3,A1,A2'`
+
+### New DOM
+
+- `#hamburger-btn` (header pill, B1)
+- `#hamburger-backdrop` (body-injected, B1)
+- `#hamburger-drawer` with `.hd-head`, `#hd-body`, `#hd-close-btn` (B1)
+- `[data-ex-hidden="1"]` attribute on contextually hidden elements (B2)
+
+### New CSS
+
+- `.hamburger-btn{,:hover}` (B1 header)
+- `.hamburger-backdrop{,.open}` + `.hamburger-drawer{,.open}` + theme-light variant (B1 drawer chrome)
+- `.hd-head{ ,h3}`, `.hd-close{,:hover}`, `.hd-body`, `.hd-ex-pill`, `.hd-section{ ,summary,summary::after,[open] summary::after,section-body}`, `.hd-btn{,:hover,--primary,[disabled],[disabled]:hover}`, `.hd-empty` (B1 drawer interior)
+- `[data-ex-hidden="1"] { display:none !important; }` (B2)
+- `.controls-row.tools-panel { display:flex !important; }` + `#more-tools-toggle { display:none !important; }` (B3)
+
+### Touched files
+
+- `今日工作區/ut-scanner-v69.html` (renamed from v68; 5 features + 3 user-visible version strings + `__VERSION_DELTA__`)
+- `今日工作區/CLAUDE.md` (§212–§216)
+- `今日工作區/CHANGELOG.md` (this entry)
+- `今日工作區/AI優化與改善建議書.md` (rewritten 2026-05-31 per boss direction; v69 batch ticked off Lane B + A1/A2)
+
+### Notes
+
+- Boss direction recorded as two new memories: `feedback_no_teacher_tools` and `feedback_program_smoothness_focus`.
+- `_HD_REGISTRY` total entries: 29; per-EX visible counts puppeteer-verified — resolution 7 / penetration 15 / weld 19 / grating 7 / maze 11.
+- A1's smoothstep is applied independently to (a) SDH lateral overlap and (b) crack lateral reach. The existing §6 EJ Gaussian orientation factor stays untouched — A1 only smooths the *spatial* edge transition, not the angular one.
+- A2 shadow alphas capped at 0.22 per CLAUDE.md §4 (beam stays the visual focus). EX05 maze skips A2 because the top-down view paradigm has no "below the probe" surface.
+- Hamburger drawer fully keyboard-accessible (ESC closes); backdrop click-to-close included.
+
+---
+
 ## v68 — 2026-05-31 EDT
 
 **Trigger:** user "HT 全 + A 區全 C區做U1,2,6,8,9,11,22 D區做D5,6" adopting the v67→v68 menu in `AI優化與改善建議書.md`. Scope this version: HT (EX teaching-entry exposure 3-piece kit) + Stage 1 (IJ / IK / IL / HU) = 7 features. Remaining Stages 2–6 queued for v69~v72 to ship progressively (Level 1 basics → Level 2 advanced → Level 2/3 flagship). Source: user fix for v67 §206 HS guided lesson being buried in collapsed More-tools panel.

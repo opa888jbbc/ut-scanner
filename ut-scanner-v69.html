@@ -279,7 +279,7 @@
 <meta charset="UTF-8">
 <!-- v50 α5 — removed user-scalable=no + maximum-scale to allow mobile pinch zoom -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>UT NDT Training Simulator — v68</title>
+<title>UT NDT Training Simulator — v69</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -822,12 +822,62 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
 .theme-light .zoom-controls button:hover { background:rgba(0,0,0,0.08); }
 .zoom-controls .zoom-readout { padding:0 6px; font-family:'JetBrains Mono',monospace; font-size:10px;
   color:var(--muted); display:flex; align-items:center; }
+
+/* ─────────────────────── v69 §212 B1 — ☰ Hamburger menu drawer ─────────────────────── */
+.hamburger-btn { font-family:'JetBrains Mono',monospace; font-size:16px; padding:3px 9px;
+  border-radius:6px; border:1px solid var(--border2); background:var(--surface); color:var(--text);
+  cursor:pointer; user-select:none; transition:background 0.15s; line-height:1; }
+.hamburger-btn:hover { background:var(--surface3); }
+.hamburger-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:90;
+  opacity:0; pointer-events:none; transition:opacity 0.18s ease-out; }
+.hamburger-backdrop.open { opacity:1; pointer-events:auto; }
+.hamburger-drawer { position:fixed; top:0; right:0; bottom:0; width:min(340px, 86vw);
+  z-index:91; background:var(--surface); border-left:1px solid var(--border2);
+  box-shadow:-12px 0 32px rgba(0,0,0,0.45); transform:translateX(102%);
+  transition:transform 0.22s ease-out; display:flex; flex-direction:column; }
+.theme-light .hamburger-drawer { box-shadow:-12px 0 32px rgba(0,0,0,0.12); }
+.hamburger-drawer.open { transform:translateX(0); }
+.hd-head { display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px 10px; border-bottom:1px solid var(--border); }
+.hd-head h3 { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700;
+  color:var(--accent); letter-spacing:.03em; margin:0; }
+.hd-close { font-size:18px; cursor:pointer; color:var(--muted); user-select:none; padding:0 4px; }
+.hd-close:hover { color:var(--text); }
+.hd-body { flex:1; overflow-y:auto; padding:10px 14px 24px; }
+.hd-ex-pill { display:inline-block; padding:2px 10px; font-size:10px; font-weight:600;
+  border-radius:10px; background:var(--surface3); color:var(--muted);
+  font-family:'JetBrains Mono',monospace; margin-bottom:10px; }
+.hd-section { margin-bottom:14px; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+.hd-section summary { padding:10px 14px; font-family:'JetBrains Mono',monospace; font-size:12px;
+  font-weight:700; color:var(--text); cursor:pointer; user-select:none; background:var(--surface2);
+  list-style:none; display:flex; align-items:center; justify-content:space-between; }
+.hd-section summary::-webkit-details-marker { display:none; }
+.hd-section summary::after { content:'▾'; color:var(--muted); transition:transform 0.15s; }
+.hd-section[open] summary::after { transform:rotate(180deg); }
+.hd-section-body { padding:10px 12px; display:flex; flex-wrap:wrap; gap:6px; }
+.hd-btn { padding:7px 12px; font-family:'JetBrains Mono',monospace; font-size:11px;
+  border-radius:6px; border:1px solid var(--border2); background:var(--surface3); color:var(--text);
+  cursor:pointer; flex:1 1 auto; min-width:90px; }
+.hd-btn:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
+.hd-btn--primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+.hd-btn[disabled] { opacity:0.4; cursor:not-allowed; }
+.hd-btn[disabled]:hover { background:var(--surface3); color:var(--text); border-color:var(--border2); }
+.hd-empty { color:var(--muted); font-size:10px; font-style:italic; padding:6px 0; }
+
+/* ─────────────────── v69 §213 B2 — Per-EX contextual UI filter ─────────────────── */
+/* Any element with [data-ex="..."] (comma-separated EX list, "*" = all) gets hidden when
+   the current exercise is not in its list. Driven by _applyExFilter() in setExercise. */
+[data-ex-hidden="1"] { display:none !important; }
+
+/* ─────────────────── v69 §214 B3 — Tools row stays expanded (collapse toggle gone) ─────────────────── */
+.controls-row.tools-panel { display:flex !important; }
+#more-tools-toggle { display:none !important; }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v68</span></h1>
+  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v69</span></h1>
   <span class="badge">Pulse-Echo</span>
   <span class="badge" id="freq-badge">5 MHz</span>
   <span class="badge ok" id="ex-badge">Exercise 1</span>
@@ -836,6 +886,9 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
   <span class="mode-toggle basic" id="learn-mode-toggle" onclick="toggleLearnMode()" title="TUTORIAL shows all hints; QUIZ hides them for self-assessment">MODE: TUTORIAL</span>
   <!-- v68 §209 IJ — Dark / Light theme toggle. localStorage `ut_theme`. -->
   <span class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle dark / light theme — light theme is projector / print / classroom friendly">🌙 Dark</span>
+  <!-- v69 §212 B1 — ☰ Hamburger menu drawer. Opens a categorised list of every secondary
+       control (Probe / Calibration / Sizing / Tools / Settings) filtered to the active EX. -->
+  <span class="hamburger-btn" id="hamburger-btn" onclick="openHamburger()" title="All controls — organised by category and filtered to the active exercise" style="margin-left:auto;">☰</span>
 </div>
 
 <!-- v50 §22 S + v51 §29 Z — Color legend chip; populated dynamically per current EX. -->
@@ -2579,7 +2632,10 @@ function getCrackEcho(c) {
   var crackHalfLen = c.lenFrac * MAT_W;
   var lateralReach = bHW + crackHalfLen * 0.5;
   if (dx >= lateralReach) return { amp:0, sp_mm:0, overlap:0 };
-  var ov = Math.max(0, 1 - dx / lateralReach);
+  // v69 §215 A1 — apply smoothstep to the lateral-reach falloff so the crack echo eases out
+  // gently as the beam axis exits the crack's reach window (matches CLAUDE.md §1 spirit).
+  var ovRaw = Math.max(0, 1 - dx / lateralReach);
+  var ov    = ovRaw * ovRaw * (3 - 2 * ovRaw);
   // Gaussian orientation response with a small diffuse floor (real cracks scatter).
   var orient = defectOrientationFactor(beamAngleDeg, c);
   var refl = Math.max(orient, 0.08);
@@ -2777,12 +2833,18 @@ function _signalForSdh(def) {
   var intL = Math.max(txX - bHW, defLeft);
   var intR = Math.min(txX + bHW, defRight);
   var overlap = (intR > intL && bHW > 0) ? Math.min((intR-intL)/(2*bHW), 1.0) : 0;
-  if (overlap < 0.005) {
+  // v69 §215 A1 — replace the hard 0.005 cut-off with a smoothstep curve so the defect echo
+  // tapers continuously to zero as the probe leaves the defect (no more pop-in / pop-out).
+  // Combined with the existing linear overlap, this gives a gentle S-curve fade per CLAUDE.md §1
+  // ("線性比例衰減 / 嚴禁開關式突兀消失") extended from BW to defect peaks themselves.
+  if (overlap <= 0) {
     return {defAmp:0, overlap:0, hitDefect:false, defCanvasY, defLeft, defRight, ry:def.ry, label:def.label};
   }
+  // smoothstep: 3x² − 2x³ — zero slope at endpoints, no discontinuity.
+  var smoothOverlap = overlap * overlap * (3 - 2 * overlap);
   var freqSensitivity = freq===5 ? 0.12 : 0.50;
   var attFactor = twoWayAtten(def.ry);
-  var defAmp = Math.min(overlap * attFactor * freqSensitivity * gainMult(), 2.5);
+  var defAmp = Math.min(smoothOverlap * attFactor * freqSensitivity * gainMult(), 2.5);
   return {defAmp, overlap, hitDefect:overlap>0.2, defCanvasY, defLeft, defRight, ry:def.ry, label:def.label};
 }
 function getPlanarSignal() {
@@ -3244,6 +3306,48 @@ function drawScan() {
     ctx.fillText('Φ 3 mm SDH per ASTM E2491', MAT_X + 6, MAT_Y + MAT_H - 4);
     } // v55 §58 BB-full — close !velCalMode branch
   }
+
+  // ── v69 §216 A2 — Soft radial-gradient shadow under the transducer + each visible defect.
+  //    Drawn BEFORE the transducer fill so it sits behind. Gives the canvas depth so the probe
+  //    no longer looks pasted flat onto the test piece. Per CLAUDE.md §4 the shadow stays
+  //    very low alpha (max ~0.22) so it does not compete with the beam.
+  (function _drawV69Shadows(){
+    if (typeof MAT_X !== 'number') return;
+    // Probe shadow: an elliptical radial gradient just beneath the probe footprint.
+    var sxc = txX, syc = SURF_Y + Math.max(3, TX_H * 0.10);
+    var srx = TX_W * 0.95, sry = Math.max(3, TX_H * 0.18);
+    var pg = ctx.createRadialGradient(sxc, syc, 0, sxc, syc, srx);
+    pg.addColorStop(0,    'rgba(0,0,0,0.22)');
+    pg.addColorStop(0.55, 'rgba(0,0,0,0.10)');
+    pg.addColorStop(1,    'rgba(0,0,0,0.00)');
+    ctx.save();
+    ctx.translate(sxc, syc); ctx.scale(1, sry / srx); ctx.translate(-sxc, -syc);
+    ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(sxc, syc, srx, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+    // Defect shadows — only for defects rendered as discrete dots (EX01 pores, EX02 SDHs).
+    function shadowAt(cx, cy, r){
+      var dg = ctx.createRadialGradient(cx, cy + r * 0.9, 0, cx, cy + r * 0.9, r * 1.6);
+      dg.addColorStop(0,    'rgba(0,0,0,0.20)');
+      dg.addColorStop(0.6,  'rgba(0,0,0,0.06)');
+      dg.addColorStop(1,    'rgba(0,0,0,0.00)');
+      ctx.save();
+      ctx.translate(cx, cy + r * 0.9); ctx.scale(1, 0.40); ctx.translate(-cx, -(cy + r * 0.9));
+      ctx.fillStyle = dg; ctx.beginPath(); ctx.arc(cx, cy + r * 0.9, r * 1.6, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+    if (exercise === 'resolution' && typeof PORE_PATTERN !== 'undefined' && PORE_PATTERN) {
+      PORE_PATTERN.forEach(function(p){
+        var px = MAT_X + p.rx * MAT_W, py = MAT_Y + p.ry * MAT_H;
+        shadowAt(px, py, Math.max(3, MAT_W * 0.006));
+      });
+    } else if (exercise === 'penetration') {
+      [SHALLOW_SDH, REF_SDH, DEEP, FAR_SDH].forEach(function(d){
+        if (!d) return;
+        var dx = MAT_X + d.rx * MAT_W, dy = MAT_Y + d.ry * MAT_H;
+        shadowAt(dx, dy, Math.max(3, MAT_W * 0.005));
+      });
+    }
+  })();
 
   // ── TRANSDUCER ───────────────────────────────────────
   var tLeft=txX-TX_W/2, tTop=SURF_Y-TX_H;
@@ -5320,7 +5424,7 @@ function exportScanPlan(){
   md += '- **Display mode:** ' + (advancedMode ? 'ADVANCED' : 'BASIC') + ' / ' + learnMode.toUpperCase() + '\n';
   md += '- **Probe position X:** ' + Math.round((txX-MAT_X)/MAT_W*240) + ' mm\n';
   md += '- **Sound-path range:** 0..200 mm\n';
-  md += '- **Generated by:** UT NDT Trainer v68\n';
+  md += '- **Generated by:** UT NDT Trainer v69\n';
   // v59 §99 CX — append Corrosion Maze score if a round has been revealed.
   if (mazeScore) {
     var hrPct = (mazeScore.hitRate*100).toFixed(0);
@@ -6503,11 +6607,12 @@ if (savedMode === 'quiz') {
 // runSmokeTests audits that each code appears as a `§N XX —` comment in the page
 // HTML (proves the touch point is tagged); missing codes log a banner warning.
 var __VERSION_DELTA__ = Object.freeze({
-  version: 'v68',
-  // v68 ships 5 rules — HT (EX teaching-entry exposure 3-piece kit), HU (all-EX entry split
-  // cards), IJ (Dark/Light theme), IK (mobile sticky bottom bar), IL (canvas pinch-zoom +
-  // drag-pan). Smoke asserts ruleCodes.length matches this ship's adopted count.
-  ruleCodes: ['HT','HU','IJ','IK','IL']
+  version: 'v69',
+  // v69 ships 5 rules per the rewritten proposal book (boss direction: drop teacher tools,
+  // focus on student gameplay + program smoothness). B1 (hamburger menu drawer), B2 (per-EX
+  // contextual control filtering), B3 (More-tools row absorbed into drawer), A1 (defect echo
+  // edge-fade replaces hard cut-off), A2 (radial-gradient shadows under probe + defects).
+  ruleCodes: ['B1','B2','B3','A1','A2']
 });
 // v66 §196 GQ — the rule-code audit serialises the whole document (innerHTML) and regex-tests
 // each code. The HTML never changes after load, so cache the result and skip the expensive
@@ -6570,6 +6675,7 @@ function runSmokeTests(){
   // v66 §200 GU — the hand-maintained ruleCodes list must match the count of rules adopted
   // for this ship. v67 adopts 3 D-area rules (HQ/HR/HS); update this expected count per ship.
   ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 5, __VERSION_DELTA__.ruleCodes.length);
+  ok('v69 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'B1,B2,B3,A1,A2');
   // v67 §205 HR — guided-walkthrough framework is wired to window.gw with the expected API.
   ok('gw.open exposed',         typeof window.gw === 'object' && typeof window.gw.open === 'function');
   ok('gw close/back/submit',    typeof window.gw.close === 'function' && typeof window.gw.back === 'function' && typeof window.gw.submit === 'function');
@@ -6663,6 +6769,156 @@ if (typeof runSmokeTests === 'function' && location.search.indexOf('nosmoke') ==
   }
 }
 loop();
+
+// ────────────────────────────────────────────────────────────────────────────────
+// v69 §212 B1 — ☰ Hamburger menu drawer. Single source of truth for every secondary
+// control as the button count keeps growing. Categories: Probe / Calibration / Sizing /
+// Tools / Settings. Items are EX-filtered against _HD_REGISTRY so the drawer only ever
+// shows what's relevant for the active exercise. Plays nicely with B2's data-ex DOM filter
+// (this drawer is the "where did the button go?" answer when the row itself is hidden).
+// ────────────────────────────────────────────────────────────────────────────────
+// EX list shorthand: '*' = all EXs; otherwise comma-joined list of exercise names.
+var _HD_REGISTRY = [
+  // section, label, exs, onClick, enabled-check-key (optional)
+  { section:'Probe',       label:'5 MHz',                exs:'resolution,penetration,weld,grating',
+    onClick:function(){ setFreq(5); },                                                title:'Low frequency · wider beam · better penetration' },
+  { section:'Probe',       label:'10 MHz',               exs:'resolution,penetration,weld,grating',
+    onClick:function(){ setFreq(10); },                                               title:'High frequency · narrower beam · better resolution' },
+  { section:'Probe',       label:'Skew 0°',              exs:'weld',
+    onClick:function(){ setSkew(0); },                                                title:'Beam directed at crack face' },
+  { section:'Probe',       label:'Skew 90°',             exs:'weld',
+    onClick:function(){ setSkew(90); },                                               title:'Beam parallel to crack — D peak vanishes' },
+  { section:'Probe',       label:'Skew 180°',            exs:'weld',
+    onClick:function(){ setSkew(180); } },
+  { section:'Probe',       label:'Skew 270°',            exs:'weld',
+    onClick:function(){ setSkew(270); } },
+  { section:'Probe',       label:'Wedge 45°',            exs:'weld', onClick:function(){ setWedge(45); } },
+  { section:'Probe',       label:'Wedge 60°',            exs:'weld', onClick:function(){ setWedge(60); } },
+  { section:'Probe',       label:'Wedge 70°',            exs:'weld', onClick:function(){ setWedge(70); } },
+  { section:'Probe',       label:'Single element',       exs:'maze', onClick:function(){ setMazeProbeType('single'); } },
+  { section:'Probe',       label:'Dual element',         exs:'maze', onClick:function(){ setMazeProbeType('dual');   } },
+  { section:'Calibration', label:'DAC overlay (toggle)', exs:'penetration,weld',
+    onClick:function(){ toggleDac(); },                                               title:'Overlay theoretical DAC curve on A-scan' },
+  { section:'Calibration', label:'DAC CAL (capture pts)',exs:'penetration',
+    onClick:function(){ if (dacCalMode) captureDacPoint(); else toggleDacCal(); },    title:'Capture 4 SDH reference points to plot your own DAC' },
+  { section:'Calibration', label:'🔬 VEL CAL',            exs:'penetration',
+    onClick:function(){ toggleVelCal(); },                                            title:'Velocity calibration on 25 mm known thickness' },
+  { section:'Calibration', label:'🧙 Cal suite',          exs:'penetration',
+    onClick:function(){ startCalWizard(); },                                          title:'Chained VEL CAL → DAC CAL wizard' },
+  { section:'Calibration', label:'IIW V1 block',         exs:'weld',
+    onClick:function(){ toggleV1Cal(); },                                             title:'Switch to V1 calibration piece — measure wedge BIP' },
+  { section:'Sizing',      label:'📏 −6 dB Drop',         exs:'penetration,weld',
+    onClick:function(){ sizingClick(); },                                             title:'Classic 6 dB drop sizing (mark left/right edges)' },
+  { section:'Sizing',      label:'🎓 Guided 6 dB lesson', exs:'penetration',
+    onClick:function(){ gw.open('6db-sizing'); },                                     title:'5-step guided walkthrough (Teachable course recreation)' },
+  { section:'Sizing',      label:'📐 DGS sizing',         exs:'penetration,weld',
+    onClick:function(){ dgsSize(); },                                                 title:'DGS equivalent reflector size — teaching grade only' },
+  { section:'Sizing',      label:'🎯 Set sensitivity',    exs:'penetration,weld',
+    onClick:function(){ setSensitivity(); },                                          title:'Auto-tune gain to 80 % FSH on current peak' },
+  { section:'Tools',       label:'📄 Export scan plan',   exs:'*',
+    onClick:function(){ exportScanPlan(); },                                          title:'Copy current setup + findings as Markdown' },
+  { section:'Tools',       label:'↺ Reset exercise',     exs:'*',
+    onClick:function(){ resetExercise(); },                                           title:'Restore sliders + toggles to defaults' },
+  { section:'Tools',       label:'📍 Drop marker',        exs:'maze',  onClick:function(){ dropMazeMarker(); } },
+  { section:'Tools',       label:'↶ Undo marker',        exs:'maze',  onClick:function(){ undoMazeMarker(); } },
+  { section:'Tools',       label:'👁 Reveal maze',        exs:'maze',  onClick:function(){ revealMaze(); } },
+  { section:'Tools',       label:'🔄 New maze',           exs:'maze',  onClick:function(){ newMaze(); } },
+  { section:'Settings',    label:'BASIC ↔ ADVANCED',     exs:'*',     onClick:function(){ toggleMode(); } },
+  { section:'Settings',    label:'TUTORIAL ↔ QUIZ',      exs:'*',     onClick:function(){ toggleLearnMode(); } },
+  { section:'Settings',    label:'🌙 Dark ↔ Light theme', exs:'*',     onClick:function(){ toggleTheme(); } }
+];
+var _HD_SECTIONS = ['Probe','Calibration','Sizing','Tools','Settings'];
+function openHamburger(){
+  var d = document.getElementById('hamburger-drawer'); var bd = document.getElementById('hamburger-backdrop');
+  if (!d || !bd) return;
+  _renderHamburger();
+  bd.classList.add('open'); d.classList.add('open');
+}
+function closeHamburger(){
+  var d = document.getElementById('hamburger-drawer'); var bd = document.getElementById('hamburger-backdrop');
+  if (d)  d.classList.remove('open');
+  if (bd) bd.classList.remove('open');
+}
+function _renderHamburger(){
+  var body = document.getElementById('hd-body'); if (!body) return;
+  var exLabel = ({ resolution:'EX 01 · Resolution', penetration:'EX 02 · Penetration',
+                   weld:'EX 03 · Weld Skew', grating:'EX 04 · Grating Lobes',
+                   maze:'EX 05 · Corrosion Maze' })[exercise] || exercise;
+  var html = '<div class="hd-ex-pill" title="Items below are filtered to this exercise">' + exLabel + '</div>';
+  _HD_SECTIONS.forEach(function(sec){
+    var items = _HD_REGISTRY.filter(function(it){
+      if (it.section !== sec) return false;
+      if (it.exs === '*') return true;
+      return it.exs.split(',').indexOf(exercise) !== -1;
+    });
+    if (!items.length) return;
+    html += '<details class="hd-section" open><summary>' + sec + '</summary><div class="hd-section-body">';
+    items.forEach(function(it){
+      var t = it.title ? ' title="' + it.title.replace(/"/g,'&quot;') + '"' : '';
+      html += '<button class="hd-btn" data-hd-idx="' + _HD_REGISTRY.indexOf(it) + '"' + t + '>' + it.label + '</button>';
+    });
+    html += '</div></details>';
+  });
+  body.innerHTML = html;
+  // Wire onclick after innerHTML write (avoid inline-handler escaping headaches).
+  body.querySelectorAll('.hd-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var idx = parseInt(btn.getAttribute('data-hd-idx'), 10);
+      var item = _HD_REGISTRY[idx]; if (!item) return;
+      try { item.onClick(); } catch(e){ console.error('[hd]', item.label, e); }
+      closeHamburger();
+    });
+  });
+}
+// Inject drawer + backdrop DOM at runtime so we don't touch the HTML body layout.
+(function injectHamburgerDOM(){
+  var bd = document.createElement('div'); bd.id = 'hamburger-backdrop'; bd.className = 'hamburger-backdrop';
+  bd.addEventListener('click', closeHamburger);
+  var dr = document.createElement('aside'); dr.id = 'hamburger-drawer'; dr.className = 'hamburger-drawer';
+  dr.innerHTML =
+    '<div class="hd-head"><h3>☰ All controls</h3><span class="hd-close" id="hd-close-btn" title="Close">✕</span></div>' +
+    '<div class="hd-body" id="hd-body"></div>';
+  document.body.appendChild(bd); document.body.appendChild(dr);
+  document.getElementById('hd-close-btn').addEventListener('click', closeHamburger);
+  // ESC closes the drawer.
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeHamburger(); });
+})();
+
+// ────────────────────────────────────────────────────────────────────────────────
+// v69 §213 B2 — Per-EX contextual DOM filter. Walk a fixed map and hide/show top-level
+// rows so each EX shows only its relevant tools. Existing per-EX show/hide on individual
+// controls (DAC CAL btn, VEL CAL btn, V1 btn, skew-bar, wedge-bar, pitch-row, maze-controls)
+// is preserved — this only handles the bulk rows the old code left always-visible.
+// ────────────────────────────────────────────────────────────────────────────────
+var _EX_HIDE_MAP = {
+  resolution: ['#sizing-btn','#gw-6db-btn','#dgs-btn','#sens-btn','#dac-cal-btn','#vel-cal-btn','#cal-wizard-btn','#v1-cal-btn'],
+  penetration: [],
+  weld:        ['#dac-cal-btn','#vel-cal-btn','#cal-wizard-btn'],
+  grating:     ['#sizing-btn','#gw-6db-btn','#dgs-btn','#sens-btn','#dac-cal-btn','#vel-cal-btn','#cal-wizard-btn','#v1-cal-btn'],
+  maze:        ['#sizing-btn','#gw-6db-btn','#dgs-btn','#sens-btn','#dac-cal-btn','#vel-cal-btn','#cal-wizard-btn','#v1-cal-btn','#ph-cell','#dac-cell']
+};
+function _applyExFilter(ex){
+  // Reset: clear all v69 hides first.
+  document.querySelectorAll('[data-ex-hidden="1"]').forEach(function(el){ el.removeAttribute('data-ex-hidden'); });
+  var hides = _EX_HIDE_MAP[ex] || [];
+  hides.forEach(function(sel){
+    document.querySelectorAll(sel).forEach(function(el){ el.setAttribute('data-ex-hidden','1'); });
+  });
+  // Re-render drawer if open so its content matches the new EX immediately.
+  var dr = document.getElementById('hamburger-drawer');
+  if (dr && dr.classList.contains('open')) _renderHamburger();
+}
+// Hook into the v68 _onExChanged seam.
+var _v68OnExChanged = _onExChanged;
+_onExChanged = function(){ _v68OnExChanged(); _applyExFilter(exercise); };
+// Re-patch setExercise wrapper to use the new _onExChanged.
+(function rewireSetExercise(){
+  // The v68 wrapper already calls _onExChanged at the end — and _onExChanged is a closure
+  // captured by name (not by ref) inside the v68 wrapper. So reassigning _onExChanged here
+  // is enough; no need to re-patch setExercise itself.
+})();
+// First filter run for boot-time exercise.
+_applyExFilter(exercise);
 
 // v68 §210 IK — Mobile sticky bottom bar HTML node. Visibility gated by @media (≤ 640px).
 (function injectMobileBar(){
@@ -6817,7 +7073,7 @@ function _renderMobileBar(){
     bar.innerHTML =
       '<button onclick="resetExercise()"><span class="mbb-icon">↺</span>Reset</button>' +
       lessonBtn +
-      '<button onclick="toggleMoreTools()"><span class="mbb-icon">🔧</span>Tools</button>' +
+      '<button onclick="openHamburger()"><span class="mbb-icon">☰</span>Menu</button>' +
       '<button onclick="_mbCycleEx()" title="Cycle to the next exercise"><span class="mbb-icon">➡️</span>Next EX</button>';
   }
 }
