@@ -3649,7 +3649,7 @@ function drawWeldBeam(ctx, bColor) {
   ctx.fillStyle=bColor+'0.85)';ctx.font='10px JetBrains Mono,monospace';ctx.textAlign='left';
   ctx.fillText(freq+' MHz  '+skewStr, tx+labelOffX, beamTop+13);
 
-  // v67 §204 HQ (b) — soft white halo around the transducer while dragging (same idea as
+  // v67 §204 HQ — (b) soft white halo around the transducer while dragging (same idea as
   // drawStandardBeam). Drawn last so it sits above the beam rays without altering colour.
   if (typeof dragging !== 'undefined' && dragging) {
     var haloW = ctx.createRadialGradient(tx, beamTop, 0, tx, beamTop, 22);
@@ -3717,7 +3717,7 @@ function drawStandardBeam(ctx, bColor) {
   var ffHWStart = (nearFieldY < beamCutY)
                    ? Math.min(N_px, cutFrac*fullD)*Math.tan(bAngle)*0.5
                    : 0;
-  // v67 §204 HQ (a) — outer soft-glow: same cone shape, very low alpha, shadowBlur for a
+  // v67 §204 HQ — (a) outer soft-glow: same cone shape, very low alpha, shadowBlur for a
   // gentle haze that makes the beam read like light, not a polygon. Drawn UNDER the cone.
   ctx.save();
   ctx.shadowColor = bColor + '0.45)';
@@ -3739,7 +3739,7 @@ function drawStandardBeam(ctx, bColor) {
   ctx.lineTo(tx+hWCut, beamCutY);       ctx.lineTo(tx-hWCut, beamCutY);
   ctx.closePath(); ctx.fill();
 
-  // v67 §204 HQ (c) — ghost extension below the defect. When the beam is cut at a defect
+  // v67 §204 HQ — (c) ghost extension below the defect. When the beam is cut at a defect
   // (beamCutY < beamBot), draw a very faint continuation down to the back wall so the cut
   // does not look like a hard switch — physically corresponds to small transmitted energy
   // past the reflector. Satisfies the spirit of CLAUDE.md §1 (no on/off beam transitions).
@@ -3773,7 +3773,7 @@ function drawStandardBeam(ctx, bColor) {
   ctx.fillStyle = bColor+'0.85)'; ctx.font='10px JetBrains Mono,monospace'; ctx.textAlign='center';
   ctx.fillText(freq+' MHz · D='+D_mm+' mm · θ½='+(bAngle*180/Math.PI).toFixed(1)+'°', tx, beamTop+13);
 
-  // v67 §204 HQ (b) — soft white halo around the transducer while dragging, so the active
+  // v67 §204 HQ — (b) soft white halo around the transducer while dragging, so the active
   // probe reads as "live" without a colour change. Painted last = on top of everything.
   if (typeof dragging !== 'undefined' && dragging) {
     var halo = ctx.createRadialGradient(tx, beamTop, 0, tx, beamTop, 22);
