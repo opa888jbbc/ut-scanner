@@ -769,6 +769,48 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 
 
 
+（以下規則 227\~230 由使用者於 2026-05-31 EDT「OK 開始 v72 L1+L3+U2+U3 跳過 L2 音效(4 條)」採納後納入,對應建議書 v71 後六視角的 學生視角 L1/L3 + UI 視角 U2/U3。v72 ship 範圍 = 4 條。)
+
+227\. 【L1 · 探頭物理慣性 + 邊界彈性反彈】拖曳探頭釋放後,探頭不再 hard-stop,而是依釋放瞬間速度繼續滑行,並依阻尼衰減直到停止;碰到工件水平 / 垂直邊界時以 0.30 彈性反彈(15% 能量保留 × 反向)。
+  - 追蹤最近 5 frame 的 (x, y, t) trail,釋放(mouseup / touchend / mouseleave)瞬間以末 2 點計 `vx = (x_last - x_prev) / dt_frame`,vy 同理;單位 px/frame
+  - 每 frame loop 內:`txX += vx; vx *= 0.92`(damping);maze 模式同時更新 txY / vy
+  - 速度低於 0.15 px/frame 視為停止
+  - 撞 `MAT_X+8` 或 `MAT_X+MAT_W-8` 時 `vx = -vx * 0.30`(elastic 反彈,30% 能量回彈)
+  - maze 模式撞 `clampMazeY` 邊界時 `vy = -vy * 0.30`
+  - dragging 期間不執行慣性(避免覆蓋使用者意圖);只在 release 後生效
+  - EX5 maze 雖採俯視 paradigm 但兩軸都套(corrosion mapping 真實探頭也會繼續滑)
+  - 視覺效果:探頭釋放後輕滑數 frame,撞邊輕彈,完全消除 hard-stop 感
+
+228\. 【L3 · Vibration API 觸覺反饋】手機 navigator.vibrate 可用時,於下列三事件 trigger 短震動,iOS 無此 API silent fail:
+  - **D peak 突破 50% FSH 上升沿** → 30 ms 短震(每次跨越閾值才 trigger,不重複)
+  - **gate-alert.trig 上升沿(ALARM trigger)** → 100 ms 中震
+  - **EX5 maze 探頭 footprint 內出現 thin spot(thinAmount > 0.5 上升沿)** → 50 ms 微震
+  - 全部走 `_vibrate(ms)` helper,內部 `navigator.vibrate && navigator.vibrate(ms)`,並依 `vibrationEnabled` 全域開關過濾
+  - 預設 ON,使用者可在 ☰ Settings → 「📳 Haptics ON/OFF」toggle 切換
+  - localStorage key `LS_KEYS.HAPTICS = 'ut_haptics'`,值 'on' / 'off' 字串(per §164 FK string mode)
+  - 桌機無 vibrate 不影響(API 不存在或 always returns false)
+  - smoke 斷言 `typeof _vibrate === 'function'`、`LS_KEYS.HAPTICS === 'ut_haptics'`
+
+229\. 【U2 · ALARM viewport 邊緣紅光 pulse】v66 之前 ALARM 只在 gate-alert 卡片上紅 border,警示感不足。v72 加入 viewport 邊緣 0.6s red glow pulse,在 `gate-alert.trig` 上升沿觸發:
+  - body 加 `.alarm-pulse` class 0.6s,內部 `::before` pseudo-element `position:fixed; inset:0; pointer-events:none; box-shadow: inset 0 0 80px 20px var(--red); opacity:0 → 0.55 → 0`
+  - CSS keyframes `@keyframes alarm-pulse { 0%{opacity:0} 40%{opacity:0.55} 100%{opacity:0} }`
+  - z-index 100,蓋在所有 UI 之上但 pointer-events:none 不擋互動
+  - 只在 trig 上升沿(`!wasTrig && nowTrig`)trigger,避免持續閃爍干擾
+  - setTimeout 600ms 後自動移除 class,可重新 trigger
+  - smoke 斷言 `_alarmPulseTrigger` exists
+
+230\. 【U3 · EX 切換 0.4s slide+fade transition】setExercise() 切 EX 時不再瞬間 swap;主內容區(`#ex-splash-wrap` + `#ex-desc` + `#gw-panel`)以 200ms slide-right + fade-out 退場,等 200ms 後 swap 內容,新 EX 從 left slide-in + fade-in 200ms 入場,總共 400ms 過渡:
+  - 加 wrapper class `.ex-transitioning-out`(`transform: translateX(20px); opacity:0;`),200ms 後 swap content
+  - swap 完加 `.ex-transitioning-in`(初始 `translateX(-20px); opacity:0;`,200ms 後回到 0/1)
+  - CSS transition `transform 0.2s ease, opacity 0.2s ease`
+  - 主要影響 `.main-content` 容器(包 ex-splash-wrap / ex-desc / gw-panel)
+  - canvas / ascan / HUD 不參與(避免重 render 卡幀)
+  - 使用者快速連點 EX 按鈕時用 `_exTransitionLock` 防止 transition 疊加(lock 期間延 100ms 再執行)
+  - 對 maze 第一次進入 `generateMaze()` 仍 sync(慢一點點但 OK)
+  - 視覺效果:EX 切換有明顯 cause-effect 連續感,而非瞬間 swap 的硬切
+
+
+
 遠端開發生產與「模糊歷史掃描」規範（加拿大時間基準）
 
 

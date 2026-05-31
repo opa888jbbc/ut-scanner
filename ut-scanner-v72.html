@@ -279,7 +279,7 @@
 <meta charset="UTF-8">
 <!-- v50 α5 — removed user-scalable=no + maximum-scale to allow mobile pinch zoom -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>UT NDT Training Simulator — v71</title>
+<title>UT NDT Training Simulator — v72</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -911,12 +911,35 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
    future banner-content-swap refactor only needs to manage one container. */
 #wedge-mismatch-banner, #v1-mode-hint { border-radius:8px; padding:10px 13px; font-size:11px;
   line-height:1.5; margin-bottom:8px; }
+
+/* ──────────────────── v72 §229 U2 — ALARM viewport edge red glow pulse ──────────────────── */
+/* On rising edge of gate-alert.trig, body gets .alarm-pulse for 0.6 s. A ::before pseudo
+   covers the entire viewport with an inset red box-shadow that fades in then out, giving
+   the operator a hard-to-miss whole-screen warning while not blocking any pointer events. */
+body.alarm-pulse::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:100;
+  box-shadow: inset 0 0 80px 20px var(--red);
+  opacity:0; animation: alarm-edge-pulse 0.6s ease-out;
+}
+@keyframes alarm-edge-pulse {
+  0%   { opacity:0; }
+  40%  { opacity:0.55; }
+  100% { opacity:0; }
+}
+
+/* ──────────────────── v72 §230 U3 — EX-switch slide+fade transition ──────────────────── */
+/* setExercise() flips the .ex-content-host between -out and -in classes around the 200 ms
+   content swap. transform:translateX + opacity keep canvas / ascan / HUD outside this layer
+   so heavy redraws don't fight the transition. */
+.ex-content-host { transition: transform 0.2s ease, opacity 0.2s ease; }
+.ex-content-host.ex-transitioning-out { transform: translateX(20px); opacity:0; }
+.ex-content-host.ex-transitioning-in  { transform: translateX(-20px); opacity:0; }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v71</span></h1>
+  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v72</span></h1>
   <span class="badge">Pulse-Echo</span>
   <span class="badge" id="freq-badge">5 MHz</span>
   <span class="badge ok" id="ex-badge">Exercise 1</span>
@@ -1053,6 +1076,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
   <button class="skew-btn"        id="wedge-70" onclick="setWedge(70)" title="70° wedge — thin sections, approaches 2nd critical angle (78°)">70°<br><span style="font-size:9px;opacity:.7">thin sect.</span></button>
 </div>
 
+<!-- v72 §230 U3 — EX-switch slide+fade transition. .ex-content-host wraps the per-EX content
+     layer (splash + desc + guided panel) so setExercise() can drive a 0.4 s out/in animation
+     without touching canvas / ascan / HUD. -->
+<div class="ex-content-host" id="ex-content-host">
 <!-- v68 §207 HT-2 + §208 HU — Per-EX entry split cards (Guided lesson / Free play). Sibling of
      #ex-desc so it survives setExercise's innerHTML rewrite. Hidden when gw.open() is active. -->
 <div id="ex-splash-wrap" style="position:relative;"></div>
@@ -1089,6 +1116,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
     <button class="gw-back-btn" onclick="gw.close()" title="Close the guided walkthrough">✕ Close</button>
   </div>
 </div>
+</div><!-- /v72 §230 U3 .ex-content-host -->
 
 <!-- v57 §81 CF — VEL CAL Your ToF input + scoring. Visible only when velCalMode is on. -->
 <div id="vel-cal-quiz" style="display:none; padding:10px 14px; margin-bottom:10px; background:rgba(0,229,255,0.06); border:1px solid var(--cyan); border-radius:8px;">
@@ -1412,7 +1440,9 @@ var LS_KEYS = Object.freeze({
   LEARN_MODE:       'ut_learn_mode',
   SEEN_DRAG_HINT:   'ut_seen_drag_hint',
   MORE_TOOLS_OPEN:  'ut_more_tools_open',
-  FS_HISTORY_TAB:   '_fsHistoryTab'
+  FS_HISTORY_TAB:   '_fsHistoryTab',
+  // v72 §228 L3 — Vibration API on/off (mobile haptics). Default 'on'.
+  HAPTICS:          'ut_haptics'
 });
 // v64 §164 FK — mode parameter forces the caller to declare type (string|json).
 // Old auto-detect (first-char '{' or '[') silently mis-parsed pure-numeric strings
@@ -1458,6 +1488,35 @@ function safeSSGet(key, fallback){
 function safeSSSet(key, value){
   try { if (value === null || value === undefined) sessionStorage.removeItem(key); else sessionStorage.setItem(key, String(value)); }
   catch(e){}
+}
+
+// v72 §228 L3 — Vibration API helper + on/off state. Default ON. iOS Safari silently no-ops.
+// Toggled via ☰ Settings → 📳 Haptics. Persisted in LS_KEYS.HAPTICS as 'on'/'off' string.
+var vibrationEnabled = (safeLSGet(LS_KEYS.HAPTICS, 'on', 'string') === 'on');
+function _vibrate(ms){
+  if (!vibrationEnabled) return false;
+  if (typeof navigator === 'undefined' || !navigator.vibrate) return false;
+  try { navigator.vibrate(ms); return true; } catch(e){ return false; }
+}
+function toggleHaptics(){
+  vibrationEnabled = !vibrationEnabled;
+  safeLSSet(LS_KEYS.HAPTICS, vibrationEnabled ? 'on' : 'off');
+  if (typeof showToast === 'function') {
+    showToast(vibrationEnabled ? '📳 Haptics ON' : '📳 Haptics OFF', 1800);
+  }
+  if (vibrationEnabled) _vibrate(30); // confirmation pulse when re-enabling
+}
+// Rising-edge state for L3 triggers (per CLAUDE.md §228 — only fire on the up-cross, not every frame).
+var _hapticsLastDpeakOver50 = false;
+var _hapticsLastAlarmTrig   = false;
+var _hapticsLastMazeThin    = false;
+// v72 §229 U2 — viewport edge red glow pulse. Rising-edge of gate-alert.trig adds .alarm-pulse
+// to <body> for 0.6 s; CSS handles the keyframe animation. _alarmPulseTrigger is the
+// single source of truth so other call sites (e.g. EX-switch resets) don't double-fire.
+function _alarmPulseTrigger(){
+  if (typeof document === 'undefined' || !document.body) return;
+  document.body.classList.add('alarm-pulse');
+  setTimeout(function(){ document.body.classList.remove('alarm-pulse'); }, 600);
 }
 
 // v58 §87 CL — Corrosion Maze EX05 state
@@ -2367,6 +2426,11 @@ function drawMazeAscan(ctx, W, H) {
   var pf  = _mazeProbeFootprint(p);
   var tA  = pf.thinAmount;             // 0 = full normal, 1 = full thin
   var rgh = pf.roughness;
+  // v72 §228 L3 — rising-edge of thinAmount > 0.5 → 50 ms haptic pulse (mobile).
+  // Drawing happens every frame; only fire when crossing the threshold upward.
+  var _thinNow = (tA > 0.5);
+  if (_thinNow && !_hapticsLastMazeThin) _vibrate(50);
+  _hapticsLastMazeThin = _thinNow;
   // v62 §130 EC — dual probe V-path bias: BW peak X reads ~2 % high (effective
   // path = thickness × bias). Demonstrates "swap probe ⇒ re-cal" to students.
   // v63 §138 EK — bias now driven by selected roof angle (5°/7°/10°).
@@ -4616,8 +4680,19 @@ function drawAscan() {
   document.getElementById('sig-bar').style.width=Math.min(maxDefAmp*100,100)+'%';
   document.getElementById('sig-val').textContent=defDb?defDb+' dB':'— dB';
 
+  // v72 §228 L3 — D peak rising-edge ≥50% FSH → 30 ms haptic pulse (mobile only).
+  var _dpeakOver50 = (defPct >= 50);
+  if (_dpeakOver50 && !_hapticsLastDpeakOver50) _vibrate(30);
+  _hapticsLastDpeakOver50 = _dpeakOver50;
+
   var alertEl=document.getElementById('gate-alert');
   if(gTriggered){
+    // v72 §228 L3 + §229 U2 — rising-edge of gate-alert.trig fires haptic 100 ms + viewport glow.
+    if (!_hapticsLastAlarmTrig) {
+      _vibrate(100);
+      _alarmPulseTrigger();
+    }
+    _hapticsLastAlarmTrig = true;
     alertEl.className='gate-alert trig';
     document.getElementById('ga-title').textContent='⚠ DEFECT DETECTED';
     // v55 §72 BP — Name the crack source from the registered peak that's currently strongest
@@ -4634,6 +4709,8 @@ function drawAscan() {
     document.getElementById('ex-badge').className='badge alarm';
     document.getElementById('ex-badge').textContent='⚠ ALARM';
   } else {
+    // v72 §228 L3 — reset alarm rising-edge flag when gate clears, so next trigger re-fires.
+    _hapticsLastAlarmTrig = false;
     window._alarmSourceLabel = null; // clear when no alarm
     alertEl.className='gate-alert clear';
     document.getElementById('ga-title').textContent='GATE CLEAR';
@@ -4905,7 +4982,37 @@ function resize() {
 // ═══════════════════════════════════════════════════
 // CONTROLS
 // ═══════════════════════════════════════════════════
-function setExercise(ex) {
+// v72 §230 U3 — setExercise transition orchestrator. _setExerciseCore is the original body;
+// setExercise wraps it with a 0.4 s out/in slide+fade on the .ex-content-host layer. A lock
+// (_exTransitionLock) absorbs rapid re-clicks by deferring 100 ms so transitions don't stack.
+var _exTransitionLock = false;
+function setExercise(ex){
+  if (_exTransitionLock) { setTimeout(function(){ setExercise(ex); }, 100); return; }
+  var host = document.getElementById('ex-content-host');
+  // First-call boot: host exists but no transition needed (initial setExercise('resolution') at load).
+  if (!host || exercise === undefined || exercise === ex) { _setExerciseCore(ex); return; }
+  _exTransitionLock = true;
+  host.classList.remove('ex-transitioning-in');
+  host.classList.add('ex-transitioning-out');
+  setTimeout(function(){
+    _setExerciseCore(ex);
+    // Mirror the wrapper-level _onExChanged() so post-swap UI (mobile bar, etc.) refreshes
+    // in sync with the visible content swap — the wrapper at line ~7359 fires _onExChanged
+    // synchronously when setExercise returns at t=0, before the transition lands, which would
+    // otherwise paint the mobile bar with the old exercise for 200 ms.
+    if (typeof _onExChanged === 'function') _onExChanged();
+    host.classList.remove('ex-transitioning-out');
+    host.classList.add('ex-transitioning-in');
+    // Next frame, drop the -in class so CSS transitions to default (translateX:0, opacity:1).
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        host.classList.remove('ex-transitioning-in');
+        _exTransitionLock = false;
+      });
+    });
+  }, 200);
+}
+function _setExerciseCore(ex) {
   exercise=ex; txX=0; phDefAmp=0; phBwAmp=0;
   // v50 §24 U — Per-EX progress counters reset on switch
   dragMoveSinceEx = 0; secondaryChangeSinceEx = false;
@@ -5480,7 +5587,7 @@ function exportScanPlan(){
   md += '- **Display mode:** ' + (advancedMode ? 'ADVANCED' : 'BASIC') + ' / ' + learnMode.toUpperCase() + '\n';
   md += '- **Probe position X:** ' + Math.round((txX-MAT_X)/MAT_W*240) + ' mm\n';
   md += '- **Sound-path range:** 0..200 mm\n';
-  md += '- **Generated by:** UT NDT Trainer v71\n';
+  md += '- **Generated by:** UT NDT Trainer v72\n';
   // v59 §99 CX — append Corrosion Maze score if a round has been revealed.
   if (mazeScore) {
     var hrPct = (mazeScore.hitRate*100).toFixed(0);
@@ -6576,7 +6683,7 @@ function drawSscan() {
 // ═══════════════════════════════════════════════════
 // LOOP + DRAG
 // ═══════════════════════════════════════════════════
-function loop(){drawScan();drawAscan();drawBscan();drawSscan();requestAnimationFrame(loop);}
+function loop(){_applyProbeInertia();drawScan();drawAscan();drawBscan();drawSscan();requestAnimationFrame(loop);}
 function getEvtX(e){var rect=scanCanvas.getBoundingClientRect();return(e.touches&&e.touches.length?e.touches[0].clientX:e.clientX)-rect.left;}
 // v58 §87 CL — 2D Y axis getter for maze mode
 function getEvtY(e){var rect=scanCanvas.getBoundingClientRect();return(e.touches&&e.touches.length?e.touches[0].clientY:e.clientY)-rect.top;}
@@ -6636,6 +6743,17 @@ function maybeMarkCompleted() {
 }
 
 // v58 §87 CL — handlers now branch on exercise=='maze' for 2D (X+Y) drag
+// v72 §227 L1 — probe inertia + elastic boundary bounce. Drag-trail samples are kept while
+// dragging; on release we derive (vx, vy) from the last two samples and let the probe glide
+// with damping 0.92, bouncing off material edges at 30% energy until |v| < 0.15 px/frame.
+var _inertiaVx = 0, _inertiaVy = 0;
+var _dragTrail = []; // ring buffer of {x, y, t} for the last few frames
+
+function _pushDragTrail(){
+  var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  _dragTrail.push({ x: txX, y: txY, t: now });
+  if (_dragTrail.length > 5) _dragTrail.shift();
+}
 function _onProbeMove(e){
   if(!dragging) return;
   if (exercise === 'maze') {
@@ -6645,15 +6763,58 @@ function _onProbeMove(e){
   } else {
     txX = clampTx(getEvtX(e)-dragOffX);
   }
+  _pushDragTrail();
   dragMoveSinceEx++; maybeMarkCompleted(); unlockStepsIfDragged();
 }
-scanCanvas.addEventListener('mousedown', function(e){dragging=true;dragOffX=getEvtX(e)-txX;scanCanvas.classList.add('dragging');hideDragHint();_onProbeMove(e);});
+// v72 §227 L1 — start inertia from the trail. Use the last two samples (frame-level dt) to
+// derive px/frame velocity, capped to a sane range so a fast flick can't fling the probe
+// outside the bounce envelope.
+function _startInertiaFromTrail(){
+  if (_dragTrail.length < 2) { _inertiaVx = 0; _inertiaVy = 0; _dragTrail = []; return; }
+  var a = _dragTrail[_dragTrail.length - 2];
+  var b = _dragTrail[_dragTrail.length - 1];
+  var dt = Math.max(1, b.t - a.t);     // ms
+  var frame = 16.67;                   // assume 60fps; px/frame = px/ms * 16.67
+  _inertiaVx = ((b.x - a.x) / dt) * frame;
+  _inertiaVy = ((b.y - a.y) / dt) * frame;
+  // Cap velocity so a wild flick stays inside the bounce envelope
+  var cap = 18;
+  if (_inertiaVx >  cap) _inertiaVx =  cap; if (_inertiaVx < -cap) _inertiaVx = -cap;
+  if (_inertiaVy >  cap) _inertiaVy =  cap; if (_inertiaVy < -cap) _inertiaVy = -cap;
+  _dragTrail = [];
+}
+// v72 §227 L1 — applied from loop() before drawScan. No-op while dragging or while velocity
+// is already negligible. Elastic bounce factor 0.30 (per CLAUDE.md §227).
+function _applyProbeInertia(){
+  if (dragging) return;
+  var v2 = _inertiaVx*_inertiaVx + _inertiaVy*_inertiaVy;
+  if (v2 < 0.0225) { _inertiaVx = 0; _inertiaVy = 0; return; }  // |v| < 0.15 → stop
+  if (exercise === 'maze') {
+    txX += _inertiaVx;
+    txY += _inertiaVy;
+    var minX = MAT_X+8, maxX = MAT_X+MAT_W-8;
+    var minY = MAT_Y+8, maxY = MAT_Y+MAT_H-8;
+    if (txX < minX) { txX = minX; _inertiaVx = -_inertiaVx * 0.30; }
+    if (txX > maxX) { txX = maxX; _inertiaVx = -_inertiaVx * 0.30; }
+    if (txY < minY) { txY = minY; _inertiaVy = -_inertiaVy * 0.30; }
+    if (txY > maxY) { txY = maxY; _inertiaVy = -_inertiaVy * 0.30; }
+  } else {
+    txX += _inertiaVx;
+    var minXx = MAT_X+TX_W/2, maxXx = MAT_X+MAT_W-TX_W/2;
+    if (txX < minXx) { txX = minXx; _inertiaVx = -_inertiaVx * 0.30; }
+    if (txX > maxXx) { txX = maxXx; _inertiaVx = -_inertiaVx * 0.30; }
+    _inertiaVy = 0;
+  }
+  _inertiaVx *= 0.92; // damping
+  _inertiaVy *= 0.92;
+}
+scanCanvas.addEventListener('mousedown', function(e){dragging=true;_inertiaVx=0;_inertiaVy=0;_dragTrail=[];dragOffX=getEvtX(e)-txX;scanCanvas.classList.add('dragging');hideDragHint();_onProbeMove(e);});
 scanCanvas.addEventListener('mousemove', _onProbeMove);
-scanCanvas.addEventListener('mouseup',   function(){dragging=false;scanCanvas.classList.remove('dragging');});
-scanCanvas.addEventListener('mouseleave',function(){dragging=false;scanCanvas.classList.remove('dragging');});
-scanCanvas.addEventListener('touchstart',function(e){e.preventDefault();dragging=true;dragOffX=getEvtX(e)-txX;hideDragHint();_onProbeMove(e);},{passive:false});
+scanCanvas.addEventListener('mouseup',   function(){dragging=false;scanCanvas.classList.remove('dragging');_startInertiaFromTrail();});
+scanCanvas.addEventListener('mouseleave',function(){if(dragging){dragging=false;scanCanvas.classList.remove('dragging');_startInertiaFromTrail();}});
+scanCanvas.addEventListener('touchstart',function(e){e.preventDefault();dragging=true;_inertiaVx=0;_inertiaVy=0;_dragTrail=[];dragOffX=getEvtX(e)-txX;hideDragHint();_onProbeMove(e);},{passive:false});
 scanCanvas.addEventListener('touchmove', function(e){e.preventDefault();_onProbeMove(e);},{passive:false});
-scanCanvas.addEventListener('touchend',  function(){dragging=false;});
+scanCanvas.addEventListener('touchend',  function(){dragging=false;_startInertiaFromTrail();});
 
 // v55 §64 BH — A-scan hover tooltip
 ascanCanvas.addEventListener('mousemove', function(e){
@@ -6747,13 +6908,11 @@ if (savedMode === 'quiz') {
 // runSmokeTests audits that each code appears as a `§N XX —` comment in the page
 // HTML (proves the touch point is tagged); missing codes log a banner warning.
 var __VERSION_DELTA__ = Object.freeze({
-  version: 'v71',
-  // v71 ships 5 rules per user feedback on v70 (shadow not visible enough + EX4 wants its
-  // own guided lesson + keep consolidating buttons). A22 (shadow rework — visible + dynamic
-  // dragging response + surface contact glow), CG (EX4 grating-lobes 4-step guided lesson),
-  // B9 (color-legend chip removed; entry in ☰ Settings), B10 (maze ⚙ settings popup retired;
-  // L2/L3 + Strict + Roof become ☰ entries), B11 (3 teach banners unified into one DOM).
-  ruleCodes: ['A22','CG','B9','B10','B11']
+  version: 'v72',
+  // v72 ships 4 rules (user dropped L2 audio): L1 — probe inertia + elastic bounce,
+  // L3 — Vibration API + ☰ Haptics toggle, U2 — ALARM viewport edge red glow pulse,
+  // U3 — EX-switch 0.4 s slide+fade transition. Rule codes align with CLAUDE.md §227-230.
+  ruleCodes: ['L1','L3','U2','U3']
 });
 // v66 §196 GQ — the rule-code audit serialises the whole document (innerHTML) and regex-tests
 // each code. The HTML never changes after load, so cache the result and skip the expensive
@@ -6815,8 +6974,19 @@ function runSmokeTests(){
   ok('__VERSION_DELTA__ frozen', Object.isFrozen(__VERSION_DELTA__));
   // v66 §200 GU — the hand-maintained ruleCodes list must match the count of rules adopted
   // for this ship. v67 adopts 3 D-area rules (HQ/HR/HS); update this expected count per ship.
-  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 5, __VERSION_DELTA__.ruleCodes.length);
-  ok('v71 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'A22,CG,B9,B10,B11');
+  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 4, __VERSION_DELTA__.ruleCodes.length);
+  ok('v72 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'L1,L3,U2,U3');
+  // v72 §227 L1 — probe inertia helpers exist; §228 L3 — _vibrate fn + HAPTICS key
+  // wired up; §229 U2 — viewport pulse trigger present; §230 U3 — transition orchestrator
+  // + transition-host wrapper element in DOM.
+  ok('L1 _applyProbeInertia',      typeof _applyProbeInertia === 'function');
+  ok('L1 inertia trail array',     Array.isArray(_dragTrail));
+  ok('L3 _vibrate fn',             typeof _vibrate === 'function');
+  ok('L3 LS_KEYS.HAPTICS',         LS_KEYS.HAPTICS === 'ut_haptics');
+  ok('L3 toggleHaptics fn',        typeof toggleHaptics === 'function');
+  ok('U2 _alarmPulseTrigger',      typeof _alarmPulseTrigger === 'function');
+  ok('U3 ex-content-host present', !!document.getElementById('ex-content-host'));
+  ok('U3 _setExerciseCore split',  typeof _setExerciseCore === 'function');
   // v67 §205 HR — guided-walkthrough framework is wired to window.gw with the expected API.
   ok('gw.open exposed',         typeof window.gw === 'object' && typeof window.gw.open === 'function');
   ok('gw close/back/submit',    typeof window.gw.close === 'function' && typeof window.gw.back === 'function' && typeof window.gw.submit === 'function');
@@ -6978,6 +7148,9 @@ var _HD_REGISTRY = [
   { section:'Settings',    label:'BASIC ↔ ADVANCED',     exs:'*',     onClick:function(){ toggleMode(); } },
   { section:'Settings',    label:'TUTORIAL ↔ QUIZ',      exs:'*',     onClick:function(){ toggleLearnMode(); } },
   { section:'Settings',    label:'🌙 Dark ↔ Light theme', exs:'*',     onClick:function(){ toggleTheme(); } },
+  // v72 §228 L3 — Haptics on/off. Mobile vibrate at D peak 50%/ALARM/maze thin spot.
+  { section:'Settings',    label:'📳 Haptics ON ↔ OFF',  exs:'*',     onClick:function(){ toggleHaptics(); },
+    title:'Mobile vibration on D peak >50% FSH (30 ms), ALARM (100 ms), maze thin spot (50 ms). iOS Safari silently no-ops.' },
   // v71 §224 B9 — color legend that used to live as an always-visible chip row.
   { section:'Settings',    label:'🎨 Color legend',       exs:'*',
     onClick:function(){

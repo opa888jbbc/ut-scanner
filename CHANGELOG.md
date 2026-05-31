@@ -10,6 +10,56 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ---
 
+## v72 — 2026-05-31 EDT
+
+**Trigger:** post-v71 six-lens proposal — user accepted "L1 + L3 + U2 + U3 (4 條,跳過 L2 音效)" from the rewritten v71-baseline proposal book. Theme: student-perspective immersion (probe inertia, mobile haptics) + UI alarm escalation + EX-switch continuity.
+
+### New rules (CLAUDE.md §227–§230)
+
+| §   | Code  | Theme                       | One-liner |
+|-----|-------|-----------------------------|-----------|
+| 227 | L1    | Probe inertia + bounce      | Drag release → glide with 0.92 damping; elastic bounce 30 % off MAT boundaries; maze 2-axis, standard 1-axis |
+| 228 | L3    | Mobile haptics              | navigator.vibrate 30 ms D-peak ≥50 %, 100 ms ALARM, 50 ms maze thin spot; ☰ Settings toggle; iOS silent-fail |
+| 229 | U2    | ALARM viewport glow         | gate-alert.trig rising edge → 0.6 s inset red box-shadow pulse on body::before, pointer-events:none |
+| 230 | U3    | EX-switch transition        | setExercise wraps with 0.4 s slide+fade on .ex-content-host (out 200 ms → swap → in 200 ms); lock absorbs rapid re-clicks |
+
+### New / modified functions
+
+- `_pushDragTrail` / `_startInertiaFromTrail` / `_applyProbeInertia` — NEW. L1 inertia state machine. Called from loop() before drawScan; reads/mutates txX/txY/inertiaVx/inertiaVy.
+- `loop()` — gains `_applyProbeInertia()` as first call.
+- mousedown / mouseup / mouseleave / touchstart / touchend handlers — reset trail on press, start inertia on release.
+- `_vibrate(ms)` / `toggleHaptics()` — NEW. L3 vibration helper + persistent toggle.
+- `_alarmPulseTrigger()` — NEW. U2 viewport edge red glow trigger; adds + removes `body.alarm-pulse` for 0.6 s.
+- gate-alert block in `drawAscan` — adds D-peak ≥50 % rising-edge L3 vibrate; ALARM rising edge fires L3 + U2; clear path resets `_hapticsLastAlarmTrig`.
+- `drawMazeAscan` — adds maze thin-spot rising-edge L3 vibrate (thinAmount > 0.5 up-cross).
+- `setExercise(ex)` — REPLACED. Now a transition orchestrator. Original body moved into `_setExerciseCore(ex)`. Calls `_onExChanged` inside the +200 ms callback to sync mobile-bar refresh with the visible content swap.
+
+### New DOM IDs / classes
+
+- `<div class="ex-content-host" id="ex-content-host">` — wraps `#ex-splash-wrap` + `#ex-desc` + `#gw-panel` so U3 transition only animates the per-EX content layer (canvas/ascan/HUD stay still).
+- `.ex-transitioning-out` / `.ex-transitioning-in` — CSS animation classes applied by setExercise transition orchestrator.
+- `body.alarm-pulse` + `body.alarm-pulse::before` — U2 viewport edge red glow overlay.
+
+### New localStorage keys
+
+- `LS_KEYS.HAPTICS = 'ut_haptics'` (value: `'on'` | `'off'`; mode `'string'`)
+
+### Hotfix included
+
+- `__VERSION_DELTA__.ruleCodes` aligned with CLAUDE.md spec names: `'A22'` was the v71 ruleCode but every comment tag used `A2.2` (the §222 spec name). The rule-audit regex `\bA22\b\s*[·—]` missed all of them → smoke FAIL → red banner at viewport bottom. Fixed by changing the ruleCode to `'A2.2'` and updating the smoke-assertion expected string. Same approach folded into v72 (ruleCodes line up with CLAUDE.md §227-230 names verbatim).
+
+### Touched files
+
+- `今日工作區/ut-scanner-v71.html` → moved to `歷史版本與日報庫/各版本/ut-scanner-v71.html`
+- `今日工作區/ut-scanner-v72.html` — NEW (v71 base + L1/L3/U2/U3 + hotfix)
+- `今日工作區/CLAUDE.md` — appended §227–§230
+- `今日工作區/AI優化與改善建議書.md` — rewritten to v71 baseline (Lane L/P/N/K/D/U × 3 = 18 big-upgrade candidates) before user picked v72 ship list
+- `ut-scanner-github/ut-scanner-v71.html` → removed; replaced with `ut-scanner-v72.html`
+- `ut-scanner-github/CLAUDE.md` — synced
+- `ut-scanner-github/CHANGELOG.md` — this entry
+
+---
+
 ## v71 — 2026-05-31 EDT
 
 **Trigger:** user feedback on v70 — (1) "EX1 陰影 動態影子沒改 我要的是漸漸消失不是什麼都沒有", (2) "EX2 的陰影固定在那邊看起來很假", (3) "EX4 也想要有 EX2 的那種教學", (4) "一些按鈕的收納你要再幫我改善 (自行決定怎麼收納)". v71 = 5 features answering each point.
