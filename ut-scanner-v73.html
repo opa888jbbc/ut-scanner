@@ -279,7 +279,7 @@
 <meta charset="UTF-8">
 <!-- v50 α5 — removed user-scalable=no + maximum-scale to allow mobile pinch zoom -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>UT NDT Training Simulator — v72</title>
+<title>UT NDT Training Simulator — v73</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -939,7 +939,7 @@ body.alarm-pulse::before {
 <body>
 
 <div class="header">
-  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v72</span></h1>
+  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v73</span></h1>
   <span class="badge">Pulse-Echo</span>
   <span class="badge" id="freq-badge">5 MHz</span>
   <span class="badge ok" id="ex-badge">Exercise 1</span>
@@ -3244,6 +3244,71 @@ function getWeldCrackSignal() {
 }
 
 // ═══════════════════════════════════════════════════
+// SHADOW OCCLUSION HELPER (v73 §231/§232/§233)
+// ═══════════════════════════════════════════════════
+// SH1 — probe vertical shadow clipped to shallowest in-column defect upper edge + smoothstep falloff
+// SH2 — multi-defect shallowest-first occlusion (deep defects hidden behind shallow ones)
+// SH3 — column half-width linear interp top→bot, defect must sit within halfWidth(y) to be candidate
+// Returns shallowest in-column defect (or null) that should clip the probe vertical shadow.
+//   probeX, sTopY, sBotY    — column extent in canvas px
+//   sTopW, sBotW            — trapezoid width at top/bot (full width, not half)
+//   exerciseName            — 'porosity' | 'penetration' | 'weld' (others → null)
+// Each defect returned as { x, y, r } in canvas px (top-edge clip = y − r).
+function _findShadowOcclusion(probeX, exerciseName, sTopY, sBotY, sTopW, sBotW) {
+  var defects = [];
+  // EX01 porosity cluster — 5 small pores, radius derived from existing draw code
+  if (exerciseName === 'porosity') {
+    var poreR = Math.max(4, MAT_W * 0.012);
+    for (var i = 0; i < PORES.length; i++) {
+      var p = PORES[i];
+      defects.push({ x: MAT_X + MAT_W * p.rx, y: MAT_Y + MAT_H * p.ry, r: poreR });
+    }
+  } else if (exerciseName === 'penetration') {
+    // EX02 four SDH (§43 AN — Φ 3 mm per ASTM E2491)
+    var sdhR = Math.max(3, MAT_W * 0.005);
+    var sdhs = [SHALLOW_SDH, REF_SDH, DEEP, FAR_SDH];
+    for (var j = 0; j < sdhs.length; j++) {
+      var s = sdhs[j];
+      defects.push({ x: MAT_X + MAT_W * s.rx, y: MAT_Y + MAT_H * s.ry, r: sdhR });
+    }
+  } else if (exerciseName === 'weld') {
+    // EX03 multi-crack — c0/c1/c2. lenFrac is along the crack axis; approximate occlusion radius
+    // as half the line length so the shadow clips when probe sits near the crack centre.
+    for (var k = 0; k < WELD_CRACKS.length; k++) {
+      var c = WELD_CRACKS[k];
+      var crackR = Math.max(5, MAT_W * (c.lenFrac || 0.05) * 0.5);
+      defects.push({ x: MAT_X + MAT_W * c.rx, y: MAT_Y + MAT_H * c.ry, r: crackR });
+    }
+  } else {
+    return null;
+  }
+  if (defects.length === 0) return null;
+
+  // SH3 — column half-width linear interp top → bot.
+  var sTopHW = sTopW / 2;
+  var sBotHW = sBotW / 2;
+  var sHeight = sBotY - sTopY;
+  function halfWidthAt(y) {
+    if (sHeight <= 0) return sTopHW;
+    var t = Math.max(0, Math.min(1, (y - sTopY) / sHeight));
+    return sTopHW + (sBotHW - sTopHW) * t;
+  }
+
+  // SH3 — keep defects inside the column. SH2 — pick shallowest.
+  var hit = null;
+  for (var n = 0; n < defects.length; n++) {
+    var d = defects[n];
+    if (d.y < sTopY) continue;
+    if (d.y - d.r > sBotY) continue;          // entirely below shadow extent → no occlusion
+    var hw = halfWidthAt(Math.min(d.y, sBotY));
+    if (Math.abs(d.x - probeX) <= hw + d.r) { // edge within column ⇒ candidate
+      if (!hit || d.y < hit.y) hit = d;
+    }
+  }
+  return hit;
+}
+
+// ═══════════════════════════════════════════════════
 // DRAW SCAN
 // ═══════════════════════════════════════════════════
 function drawScan() {
@@ -3420,29 +3485,77 @@ function drawScan() {
   //    the contact "press" is felt, (3) a radial contact glow at the exact probe footprint
   //    (SURF_Y) on top of the vertical column — gives a hard contact point that fades laterally,
   //    making the shadow feel "rooted" to the probe rather than floating.
-  if (exercise !== 'maze' && typeof MAT_X === 'number' && typeof MAT_Y === 'number') {
+  //
+  // v73 §231 SH1 / §232 SH2 / §233 SH3 — shadow occlusion by defects.
+  //   Old behaviour (v71 §222 A2.2): column drawn straight down to 55 % depth regardless of
+  //   defects on the path — user reported (2026-05-31 EDT screenshot) the shadow "穿透 porosity"
+  //   in EX01 which is physically wrong. v73 picks the shallowest in-column defect and clips the
+  //   column to its top edge, then fades alpha inside the defect with a smoothstep to avoid the
+  //   hard-edged "cut off" look.
+  if (exercise !== 'maze' && exercise !== 'grating' && typeof MAT_X === 'number' && typeof MAT_Y === 'number') {
     var isDragging = (typeof dragging !== 'undefined' && dragging);
     var topA  = isDragging ? 0.40 : 0.30;
     var midA  = isDragging ? 0.18 : 0.12;
     var sxc   = txX;
     var sTopY = SURF_Y;                    // start at workpiece surface
-    var sBotY = MAT_Y + MAT_H * 0.55;      // fully transparent by 55 % depth — never touches back wall
+    var sBotYRaw = MAT_Y + MAT_H * 0.55;   // fully transparent by 55 % depth — never touches back wall
     var sTopW = TX_W * 0.95;               // wider top — matches probe footprint better
     var sBotW = TX_W * 0.30;               // narrows down → reads as a beam-influenced shadow
+
+    // SH1+SH2+SH3 — find the shallowest defect inside the shadow column.
+    var occlusion = _findShadowOcclusion(sxc, exercise, sTopY, sBotYRaw, sTopW, sBotW);
+    var sBotY     = sBotYRaw;
+    var fadeBotY  = sBotYRaw;              // where the smoothstep tail ends (only differs from sBotY when occluded)
+    if (occlusion) {
+      var defectTopY = occlusion.y - occlusion.r;
+      sBotY    = Math.max(sTopY + 1, defectTopY);                  // truncate column to defect upper edge
+      fadeBotY = Math.min(sBotYRaw, defectTopY + occlusion.r * 0.6); // smoothstep tail inside defect (0.6r)
+    }
+
+    // Main trapezoid down to sBotY (now truncated when occluded)
+    var trapBotW = sTopW + (sBotW - sTopW) * ((sBotY - sTopY) / Math.max(1, sBotYRaw - sTopY));
     var sg = ctx.createLinearGradient(sxc, sTopY, sxc, sBotY);
     sg.addColorStop(0.00, 'rgba(0,0,0,' + topA + ')');
-    sg.addColorStop(0.35, 'rgba(0,0,0,' + midA + ')');
-    sg.addColorStop(1.00, 'rgba(0,0,0,0.00)');
+    sg.addColorStop(Math.min(0.99, 0.35), 'rgba(0,0,0,' + midA + ')');
+    // When occluded, end alpha at midA*0.5 not 0 — the smoothstep tail below will continue the fade.
+    var endA = occlusion ? (midA * 0.5) : 0;
+    sg.addColorStop(1.00, 'rgba(0,0,0,' + endA + ')');
     ctx.save();
     ctx.fillStyle = sg;
     ctx.beginPath();
     ctx.moveTo(sxc - sTopW / 2, sTopY);
     ctx.lineTo(sxc + sTopW / 2, sTopY);
-    ctx.lineTo(sxc + sBotW / 2, sBotY);
-    ctx.lineTo(sxc - sBotW / 2, sBotY);
+    ctx.lineTo(sxc + trapBotW / 2, sBotY);
+    ctx.lineTo(sxc - trapBotW / 2, sBotY);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
+
+    // SH1 internal smoothstep falloff — only when occluded.
+    // Render thin overlay from sBotY → fadeBotY with alpha = endA · (1 − smoothstep(t)) where t ∈ [0,1].
+    // Smoothstep cubic 3t² − 2t³ keeps zero slope at both ends, no perceptible step.
+    if (occlusion && fadeBotY > sBotY + 0.5) {
+      var fadeBotW = sTopW + (sBotW - sTopW) * ((fadeBotY - sTopY) / Math.max(1, sBotYRaw - sTopY));
+      // 6-stop approximation of smoothstep so a single linearGradient covers the falloff smoothly.
+      var fg = ctx.createLinearGradient(sxc, sBotY, sxc, fadeBotY);
+      var fStops = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0];
+      for (var fi = 0; fi < fStops.length; fi++) {
+        var ft = fStops[fi];
+        var fs = 1 - (3 * ft * ft - 2 * ft * ft * ft); // 1 − smoothstep
+        fg.addColorStop(ft, 'rgba(0,0,0,' + (endA * fs).toFixed(3) + ')');
+      }
+      ctx.save();
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(sxc - trapBotW / 2, sBotY);
+      ctx.lineTo(sxc + trapBotW / 2, sBotY);
+      ctx.lineTo(sxc + fadeBotW / 2, fadeBotY);
+      ctx.lineTo(sxc - fadeBotW / 2, fadeBotY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
     // Contact-point radial glow — a flat ellipse anchored at the surface that "roots" the shadow
     // visually to the probe foot. Scales laterally so it reads even when the probe is stationary.
     var glowR = TX_W * 0.55;
@@ -5587,7 +5700,7 @@ function exportScanPlan(){
   md += '- **Display mode:** ' + (advancedMode ? 'ADVANCED' : 'BASIC') + ' / ' + learnMode.toUpperCase() + '\n';
   md += '- **Probe position X:** ' + Math.round((txX-MAT_X)/MAT_W*240) + ' mm\n';
   md += '- **Sound-path range:** 0..200 mm\n';
-  md += '- **Generated by:** UT NDT Trainer v72\n';
+  md += '- **Generated by:** UT NDT Trainer v73\n';
   // v59 §99 CX — append Corrosion Maze score if a round has been revealed.
   if (mazeScore) {
     var hrPct = (mazeScore.hitRate*100).toFixed(0);
@@ -6908,11 +7021,15 @@ if (savedMode === 'quiz') {
 // runSmokeTests audits that each code appears as a `§N XX —` comment in the page
 // HTML (proves the touch point is tagged); missing codes log a banner warning.
 var __VERSION_DELTA__ = Object.freeze({
-  version: 'v72',
-  // v72 ships 4 rules (user dropped L2 audio): L1 — probe inertia + elastic bounce,
-  // L3 — Vibration API + ☰ Haptics toggle, U2 — ALARM viewport edge red glow pulse,
-  // U3 — EX-switch 0.4 s slide+fade transition. Rule codes align with CLAUDE.md §227-230.
-  ruleCodes: ['L1','L3','U2','U3']
+  version: 'v73',
+  // v73 ships 3 rules (SH hotfix per 2026-05-31 EDT user screenshot — shadow penetrating
+  // porosity in EX01): SH1 — vertical shadow clipped to shallowest in-column defect upper
+  // edge + smoothstep falloff inside defect (0.6 r tail), SH2 — multi-defect shallowest-first
+  // occlusion (light blocked by shallow, deep hidden), SH3 — column half-width linear interp
+  // top → bot, defect must sit within halfWidth(y) of probe centre to be a candidate.
+  // Rule codes align with CLAUDE.md §231-233. Scope: EX01/EX02/EX03 only (EX04 grating &
+  // EX05 maze skipped — no single-axis column concept).
+  ruleCodes: ['SH1','SH2','SH3']
 });
 // v66 §196 GQ — the rule-code audit serialises the whole document (innerHTML) and regex-tests
 // each code. The HTML never changes after load, so cache the result and skip the expensive
@@ -6974,11 +7091,10 @@ function runSmokeTests(){
   ok('__VERSION_DELTA__ frozen', Object.isFrozen(__VERSION_DELTA__));
   // v66 §200 GU — the hand-maintained ruleCodes list must match the count of rules adopted
   // for this ship. v67 adopts 3 D-area rules (HQ/HR/HS); update this expected count per ship.
-  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 4, __VERSION_DELTA__.ruleCodes.length);
-  ok('v72 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'L1,L3,U2,U3');
-  // v72 §227 L1 — probe inertia helpers exist; §228 L3 — _vibrate fn + HAPTICS key
-  // wired up; §229 U2 — viewport pulse trigger present; §230 U3 — transition orchestrator
-  // + transition-host wrapper element in DOM.
+  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 3, __VERSION_DELTA__.ruleCodes.length);
+  ok('v73 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'SH1,SH2,SH3');
+  // v72 features still alive — §227 L1 probe inertia, §228 L3 vibration, §229 U2 viewport
+  // pulse, §230 U3 EX-switch transition. Carry-over smoke kept so v73 doesn't regress them.
   ok('L1 _applyProbeInertia',      typeof _applyProbeInertia === 'function');
   ok('L1 inertia trail array',     Array.isArray(_dragTrail));
   ok('L3 _vibrate fn',             typeof _vibrate === 'function');
@@ -6987,6 +7103,35 @@ function runSmokeTests(){
   ok('U2 _alarmPulseTrigger',      typeof _alarmPulseTrigger === 'function');
   ok('U3 ex-content-host present', !!document.getElementById('ex-content-host'));
   ok('U3 _setExerciseCore split',  typeof _setExerciseCore === 'function');
+  // v73 §231 SH1 / §232 SH2 / §233 SH3 — shadow occlusion helper present and behaving.
+  ok('SH1 _findShadowOcclusion fn', typeof _findShadowOcclusion === 'function');
+  ok('SH2 shallowest-first', (function(){
+       // Stub a 3-defect column at probeX=100 with column [50, 200] wide top→bot.
+       // Defects at depths 60 / 90 / 130 should pick the y=60 one as shallowest.
+       var saved = { MAT_X: MAT_X, MAT_Y: MAT_Y, MAT_W: MAT_W, MAT_H: MAT_H, PORES: PORES };
+       MAT_X = 0; MAT_Y = 0; MAT_W = 200; MAT_H = 200;
+       PORES = [
+         { rx: 0.50, ry: 0.30, type:'porosity', touchesBackwall:false },  // y=60
+         { rx: 0.50, ry: 0.45, type:'porosity', touchesBackwall:false },  // y=90
+         { rx: 0.50, ry: 0.65, type:'porosity', touchesBackwall:false },  // y=130
+       ];
+       var occ = _findShadowOcclusion(100, 'porosity', 0, 200, 100, 40);
+       MAT_X = saved.MAT_X; MAT_Y = saved.MAT_Y; MAT_W = saved.MAT_W; MAT_H = saved.MAT_H; PORES = saved.PORES;
+       return occ && Math.abs(occ.y - 60) < 1;
+     })());
+  ok('SH3 column-width interp', (function(){
+       // Far-off defect should NOT occlude when outside the column half-width at its depth.
+       var saved = { MAT_X: MAT_X, MAT_Y: MAT_Y, MAT_W: MAT_W, MAT_H: MAT_H, PORES: PORES };
+       MAT_X = 0; MAT_Y = 0; MAT_W = 200; MAT_H = 200;
+       // Defect at y=180 (near bot, halfW shrinks toward 20px), x offset 80 from probeX → outside.
+       PORES = [{ rx: 0.90, ry: 0.90, type:'porosity', touchesBackwall:false }];
+       var occOut = _findShadowOcclusion(100, 'porosity', 0, 200, 100, 40);
+       // Same defect at top depth y=0 (halfW=50px) at x=140 → inside.
+       PORES = [{ rx: 0.70, ry: 0.05, type:'porosity', touchesBackwall:false }];
+       var occIn = _findShadowOcclusion(100, 'porosity', 0, 200, 100, 40);
+       MAT_X = saved.MAT_X; MAT_Y = saved.MAT_Y; MAT_W = saved.MAT_W; MAT_H = saved.MAT_H; PORES = saved.PORES;
+       return (occOut === null) && (occIn !== null);
+     })());
   // v67 §205 HR — guided-walkthrough framework is wired to window.gw with the expected API.
   ok('gw.open exposed',         typeof window.gw === 'object' && typeof window.gw.open === 'function');
   ok('gw close/back/submit',    typeof window.gw.close === 'function' && typeof window.gw.back === 'function' && typeof window.gw.submit === 'function');

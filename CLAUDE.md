@@ -811,6 +811,25 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 
 
 
+（以下規則 231\~233 由使用者於 2026-05-31 EDT「改完這個問題之後 UT73 版本繼續」採納 v73 hotfix 後納入,對應建議書 v72-post 的 SH 區三條(老闆截圖回報 EX01 探頭陰影穿透 porosity 缺陷藍圈)。v73 ship 範圍 = 3 條 SH;後續 v73 main = P1+P2+P3+N1+K2 排下版。）
+
+231\. 【SH1 · 探頭陰影碰缺陷截斷 + 內部 smoothstep falloff】v69 §216 A2 / v71 §222 A2.2 的 vertical-shadow trapezoid 從 `SURF_Y` 直接畫到 `sBotY = MAT_Y + MAT_H × 0.55`,沒考慮路徑上是否有缺陷。v73 改:`drawScan` 在繪 trapezoid 前先呼叫 `_findShadowOcclusion(txX, defectsForEx)` 找出當前 EX defects 中**落在 column 寬度內**(per SH3)且**最淺**(per SH2)的那個,把 trapezoid 的底邊 Y 截斷到該缺陷上緣(`defectTopY = defect.ry × MAT_H + MAT_Y - defect.r`);沒命中時 fall back 到 v71 的 `sBotY`。
+  - **內部 quick falloff**:截斷後在缺陷上緣往下 `0.6 × defect.r` 範圍內 alpha smoothstep `3x²−2x³` 從原值平滑到 0,避開硬切感(對齊 CLAUDE.md §1 + §215 A1 平滑衰減精神)
+  - **範圍限定**:`exercise === 'porosity' || exercise === 'penetration' || exercise === 'weld'`(EX01/EX02/EX03)。EX04 grating 與 EX05 maze 各自跳過(grating 是陣列探頭無單一中軸 column;maze 是俯視 paradigm 無垂直陰影概念)
+  - 對齊 §3 碰撞截斷精神:原本只規範 beam line,SH1 把同樣物理推到 shadow column 一致
+
+232\. 【SH2 · 多缺陷最淺者優先 / Shallowest-First Occlusion】路徑上有多個 defect 時,`_findShadowOcclusion` 用 `Math.min(...candidates.map(d => d.ry))` 取最淺者,陰影截斷在那個的上緣。深的 defect 在陰影下方自然不會被「漏陰影」蓋到。符合「光被淺的遮住,深的看不見」的光學直覺。
+  - EX02 多 SDH (REF 50mm / DEEP 80mm / SHALLOW 12mm / FAR 100mm,§36 AG / §43 AN) 時,探頭走到 SHALLOW 上方陰影截到 SHALLOW 而非走到 DEEP
+  - EX03 multi-crack (c0/c1/c2 三個 cracks,§50 AR-full) 時,探頭走到 c1 上方陰影截到 c1 不到 c0
+  - smoke 斷言 `_findShadowOcclusion` 對 [{ry:0.3}, {ry:0.5}, {ry:0.7}] 三 defect 同一 column 命中時回傳 ry=0.3 那個
+
+233\. 【SH3 · 缺陷邊緣 column 寬度判定】陰影是 vertical column 不是無限寬條,只有 defect.x 落在當前深度的 column 半寬範圍內才算「被擋住」。column 半寬隨深度 linear 變化:`halfW(y) = TX_W × (0.85 + (0.35 - 0.85) × (y - SURF_Y) / (sBotY - SURF_Y)) / 2`(top 0.85×TX_W、bot 0.35×TX_W,對齊 §216 A2 trapezoid 設計);defect 必須 `|defect.x - txX| ≤ halfW(defect.y)` 才算命中候選,進入 SH2 篩最淺者。
+  - 防止「探頭在 EX01 5MHz 走到第 5 顆 P5 旁邊但離 X 軸很遠」的場景下陰影誤被截斷
+  - EX01 porosity cluster 5 顆橫向 spread 時,只有當前在探頭正下方的那顆才會擋陰影
+  - smoke 斷言 `_shadowColumnHalfWidthMm(SURF_Y) ≈ TX_W × 0.85 / 2` 跟 `_shadowColumnHalfWidthMm(sBotY) ≈ TX_W × 0.35 / 2`
+
+
+
 遠端開發生產與「模糊歷史掃描」規範（加拿大時間基準）
 
 

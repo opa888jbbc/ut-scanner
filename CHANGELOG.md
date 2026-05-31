@@ -10,6 +10,50 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ---
 
+## v73 — 2026-05-31 EDT
+
+**Trigger:** Boss-flagged screenshot (EX01, 5 MHz porosity cluster, red-circled region): probe vertical shadow penetrating below the blue porosity defects — physically wrong, should be blocked at the defect. Boss command: "改完這個問題之後 UT73 版本繼續". v73 ships the SH hotfix only; the planned v73 main (P1+P2+P3+N1+K2) is bumped to v74.
+
+### New rules (CLAUDE.md §231–§233)
+
+| §   | Code | Theme                                  | One-liner |
+|-----|------|----------------------------------------|-----------|
+| 231 | SH1  | Shadow-clip at defect + smoothstep tail | Trapezoid bot Y clipped to shallowest in-column defect upper edge; 0.6r smoothstep falloff inside the defect avoids hard-cut look |
+| 232 | SH2  | Shallowest-first occlusion              | When multiple defects sit inside the column, only the shallowest one occludes — deep defects are visually hidden behind shallow ones (optical intuition) |
+| 233 | SH3  | Column half-width interp                | Defect must sit within `halfWidth(y) + r` of probeX (linear interp top→bot 0.95→0.30 × TX_W / 2) to be an occlusion candidate — prevents stray side defects from clipping |
+
+### New / modified functions
+
+- `_findShadowOcclusion(probeX, exerciseName, sTopY, sBotY, sTopW, sBotW)` — NEW (drawScan-adjacent). Returns shallowest in-column defect `{x, y, r}` or null. Filters per exerciseName: 'porosity' → PORES (5 pores, r ≈ MAT_W × 0.012), 'penetration' → 4 SDH, 'weld' → WELD_CRACKS (3 cracks). EX04 grating / EX05 maze return null (out of scope per §231 SH1).
+- Shadow block in `drawScan` — REPLACED. Calls `_findShadowOcclusion`; on hit, clips trapezoid bot Y to `defect.y − defect.r` and renders a 6-stop smoothstep fade-out polygon from clip to `clip + 0.6·r`. End alpha of the main trapezoid is `midA × 0.5` when occluded (not 0) so the fade-out picks up smoothly. EX04 added to the skip list alongside maze.
+- `__VERSION_DELTA__` — version bumped to 'v73', ruleCodes now `['SH1','SH2','SH3']`.
+
+### Smoke test updates
+
+- `ruleCodes count matches ship` expectation: 4 → 3.
+- New `SH1 _findShadowOcclusion fn` typeof check.
+- New `SH2 shallowest-first` — stubs MAT_X/Y/W/H + PORES at 3 depths, asserts y=60 (shallowest) is picked.
+- New `SH3 column-width interp` — verifies offset-x defect at deep position outside column gets `null`, offset-x defect at shallow position inside column gets non-null.
+- v72 carry-over checks (L1 inertia / L3 vibration / U2 alarm / U3 transition) all retained to guard regression.
+- Smoke result: **48 / 48 pass** verified via puppeteer headless on `file://` v73.html.
+
+### Touched files
+
+- `今日工作區/ut-scanner-v73.html` (created from v72.html — 7544 lines + helper + smoke = ~7600)
+- `今日工作區/CLAUDE.md` (§231–§233 inserted before "遠端開發生產 與「模糊歷史掃描」規範")
+- `ut-scanner-github/ut-scanner-v72.html` removed; v73.html added.
+- `ut-scanner-github/CLAUDE.md` synced.
+- `今日工作區/AI優化與改善建議書.md` — SH hotfix proposal at top, marked accepted.
+
+### Visual verification (puppeteer screenshots, `今日工作區/uploads/v73_test/`)
+
+- `ex01_over_porosity.png` — probe at rx=0.50 (centre porosity cluster): shadow column truncated at the pore upper edge. ✓
+- `ex01_off_porosity.png` — probe at rx=0.85 (right of cluster): shadow extends down to v71's 55 % depth (no occlusion). ✓
+- `ex02_over_ref_sdh.png` — probe at rx=0.30 (over Ref SDH @ 50 mm): shadow column visibly stops at SDH top edge, doesn't reach back wall. ✓
+- `ex05_maze.png` — top-down maze view, no vertical shadow rendered (`exercise !== 'maze'` skip). ✓
+
+---
+
 ## v72 — 2026-05-31 EDT
 
 **Trigger:** post-v71 six-lens proposal — user accepted "L1 + L3 + U2 + U3 (4 條,跳過 L2 音效)" from the rewritten v71-baseline proposal book. Theme: student-perspective immersion (probe inertia, mobile haptics) + UI alarm escalation + EX-switch continuity.
