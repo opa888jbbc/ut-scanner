@@ -698,6 +698,43 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 
 
 
+（以下規則 217\~221 由使用者於 2026-05-31 EDT「OK 開始 v70 → UT 繼續」採納第三版建議書 v70 起手清單後納入。v70 ship 範圍 = B4 + B5 + B6 + B7 + A3 = 5 條。重點:更徹底的按鈕收編(header 5 個 badge 全砍 / controls-row 只留 GAIN / Couplant+Material 預設隱藏可從 ☰ toggle / tools-panel 全砍只走 ☰) + A3 beam 邊緣三層柔化。)
+
+
+
+217\. 【B4 · Header 大瘦身】CSS 隱藏 5 個 header 子元素:
+  - `.header > .badge`(Pulse-Echo 裝飾)
+  - `.header > #freq-badge`(freq 重複 freq-bar)
+  - `.header > #ex-badge`(EX 重複 ex-bar)
+  - `.header > #mode-toggle`(BASIC/ADVANCED toggle 已在 ☰ Settings)
+  - `.header > #learn-mode-toggle`(TUTORIAL/QUIZ toggle 已在 ☰ Settings)
+
+  結果:header 只剩 h1 + theme-toggle + hamburger-btn 三個元素,大幅 declutter。Puppeteer 驗 `.header > *` 經 `getComputedStyle().display !== 'none'` filter 後僅 H1 / SPAN#theme-toggle / SPAN#hamburger-btn 三個。
+
+218\. 【B5 · controls-row 收編】hide `#ph-cell, #dac-cell, #reset-btn { display:none !important; }`:
+  - PEAK HOLD cell 移進 ☰ Calibration(新加 `togglePeakHold` 對應 entry,exs:'penetration,weld')
+  - DAC overlay cell 移進 ☰ Calibration(已有 entry)
+  - Reset 按鈕已在 ☰ Tools(已有 entry),主 UI 重複多餘
+  - 結果:主 controls-row 只剩 GAIN slider(高頻使用,留在主視圖)
+
+219\. 【B6 · Couplant + Material 收編 + ☰ toggle】:
+  - 對 `<div class="controls-row">` 包 COUPLANT QUALITY + MATERIAL 兩 cell 加 `id="cq-mat-row"`
+  - CSS 預設 `#cq-mat-row { display:none; }` 隱藏整個 row
+  - 加 class `.v70-shown { display:flex; }` 用於 toggle 開啟
+  - ☰ Probe section 加按鈕「💧 Couplant + Material」(exs:'*'),點按 `row.classList.toggle('v70-shown')` 切換可見性,加 toast 提示當前狀態
+  - 結果:預設極簡(沒有 Couplant + Material 占垂直空間),需要時 ☰ 一鍵展開
+
+220\. 【B7 · tools-panel 全砍走 ☰】撤銷 v69 §214 B3 的「force visible」,改 `.controls-row.tools-panel { display:none !important; }`(覆寫 B3 的 force visible 規則 — CSS 後寫贏)。tools-panel 內 7 個 button(Size −6dB / Guided 6dB / DGS / Set sens / Export / DAC CAL / VEL CAL / Cal suite / V1)**全部只透過 ☰ 漢堡選單存取**。v69 §214 B3 的 `#more-tools-toggle { display:none }` 保留(按鈕本來就不該回來)。
+
+221\. 【A3 · beam cone 邊緣三層柔化】`drawStandardBeam` 在原 §204 HQ 外圈 soft-glow(1.10×,shadowBlur 7,alpha 0.10)之外,**再加一層更外圍 1.25× 的 ultra-soft bloom**(shadowBlur 14,alpha 0.04),三層由內而外:
+  - 主 cone:α 0.05~0.52 gradient(原本)
+  - HQ 外圈:1.10×,blur 7,α 0.10(v67 加)
+  - **A3 最外圈:1.25×,blur 14,α 0.04(v70 新加)**
+
+  視覺效果:beam 邊緣不再有硬 polygon 線,而是溶入背景的 soft halo,光感大幅提升。drawWeldBeam(EX03 斜束)未動 — A4~A6 之後再 backport。
+
+
+
 遠端開發生產與「模糊歷史掃描」規範（加拿大時間基準）
 
 

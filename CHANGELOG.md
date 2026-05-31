@@ -10,6 +10,52 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ---
 
+## v70 — 2026-05-31 EDT
+
+**Trigger:** user "OK 開始 v70" (relayed via "UT 繼續" after proposal-book v3 confirmation). v70 batch = B4 header de-bloat + B5 controls-row de-bloat + B6 couplant/material row hidden + ☰ toggle + B7 tools-panel fully retired + A3 beam edge triple-feather. Scope per v3 proposal book Lane B's expanded 11-item plan (B1–B3 already shipped v69) and Lane A's A3 physics polish.
+
+### New rules (CLAUDE.md §217–§221)
+
+| §   | Code | Theme              | One-liner |
+|-----|------|--------------------|-----------|
+| 217 | B4   | UI declutter       | Header drops 5 badges (Pulse-Echo / freq / EX / MODE: BASIC / MODE: TUTORIAL) — only h1 + theme + ☰ left |
+| 218 | B5   | UI declutter       | PEAK HOLD cell + DAC cell + Reset button hidden; PEAK HOLD now an ☰ Calibration entry |
+| 219 | B6   | UI declutter       | Couplant + Material row hidden by default; new ☰ Probe toggle "💧 Couplant + Material" flips visibility |
+| 220 | B7   | UI declutter       | tools-panel fully hidden — every button reachable only via ☰ (drawer is the sole secondary path) |
+| 221 | A3   | Visual smoothness  | drawStandardBeam adds a third outer cone layer (1.25 × ffHW, blur 14, α 0.04) — beam edge dissolves into bg |
+
+### New / modified functions
+
+- `_HD_REGISTRY` extended — `💧 Couplant + Material` toggle (Probe) + `PEAK HOLD (toggle)` (Calibration)
+- `drawStandardBeam` — A3 outermost bloom layer drawn before the existing HQ glow layer
+
+### New DOM
+
+- `id="cq-mat-row"` added to the controls-row containing `#cq-slider` + `#mat-sel` (B6)
+- `.v70-shown` class on `#cq-mat-row` to flip visibility from ☰ toggle (B6)
+
+### New CSS
+
+- `.header > .badge, .header > #freq-badge, .header > #ex-badge, .header > #mode-toggle, .header > #learn-mode-toggle { display:none !important; }` (B4)
+- `#ph-cell, #dac-cell, #reset-btn { display:none !important; }` (B5)
+- `#cq-mat-row { display:none; }` + `#cq-mat-row.v70-shown { display:flex; }` (B6)
+- `.controls-row.tools-panel { display:none !important; }` — overrides v69 §214 force-visible by source order (B7)
+
+### Touched files
+
+- `今日工作區/ut-scanner-v70.html` (renamed from v69; 5 features + 3 user-visible version strings + `__VERSION_DELTA__`)
+- `今日工作區/CLAUDE.md` (§217–§221)
+- `今日工作區/CHANGELOG.md` (this entry)
+
+### Notes
+
+- Puppeteer-verified header now exposes exactly H1 + #theme-toggle + #hamburger-btn (filter via `getComputedStyle().display !== 'none'`).
+- Puppeteer-verified EX02 drawer count after v70 = 17 items (15 from v69 + 2 new: Couplant toggle + PEAK HOLD); EX01 = 9 (was 7).
+- A3 backport to `drawWeldBeam` deferred until v71 + (along with A4 60-FPS / A5 EX-switch flicker work) — drawWeldBeam has multi-leg rays so the bloom math needs per-leg accounting.
+- B7 cleanly overrides v69 B3 by relying on CSS source-order; both rules co-exist in the file as audit trail. Reviewers should read §214 + §220 together for the full B-line story.
+
+---
+
 ## v69 — 2026-05-31 EDT
 
 **Trigger:** user "OK 開始 v69" after the proposal book was rewritten per the boss's 2026-05-31 directive (drop teacher tools, focus on student gameplay + program smoothness, add hamburger menu, per-EX contextual UI, dev-lens items become visible physics polish). Scope = B1 + B2 + B3 + A1 + A2 = 5 features. Remaining Lane A items (A3–A9), Lane B is now done, Lane C content queued v70 onward.
