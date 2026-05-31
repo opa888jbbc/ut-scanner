@@ -10,6 +10,52 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ---
 
+## v71 — 2026-05-31 EDT
+
+**Trigger:** user feedback on v70 — (1) "EX1 陰影 動態影子沒改 我要的是漸漸消失不是什麼都沒有", (2) "EX2 的陰影固定在那邊看起來很假", (3) "EX4 也想要有 EX2 的那種教學", (4) "一些按鈕的收納你要再幫我改善 (自行決定怎麼收納)". v71 = 5 features answering each point.
+
+### New rules (CLAUDE.md §222–§226)
+
+| §   | Code  | Theme                | One-liner |
+|-----|-------|----------------------|-----------|
+| 222 | A2.2  | Shadow rework        | alpha 0.17→0.30 + dragging boost + surface contact glow at probe foot |
+| 223 | CG    | EX04 guided lesson   | New `grating-lobes` 5-step walkthrough — Bragg condition + N-elements trade-off |
+| 224 | B9    | UI declutter         | color-legend chip retired; ☰ Settings gets "🎨 Color legend" toast entry |
+| 225 | B10   | UI declutter         | maze ⚙ popup retired; L2/L3 + Strict + Roof×3 become first-class ☰ Settings entries |
+| 226 | B11   | UI consistency       | Three pre-v71 teach-banners now share CSS skin (border-radius / padding / font-size / margin) |
+
+### New / modified functions
+
+- `_drawV69Shadows` IIFE (inside drawScan) → rewritten as the v71 A2.2 block. Uses `dragging` to bump alpha and adds a radial contact glow at the probe surface footprint.
+- `GW_FLOWS['grating-lobes']` — NEW 5-step flow (Step 1 confirm d/λ ≤ 0.5, Step 2 confirm grating lobes appear, Step 3 confirm N ≥ 16, Step 4 review w/ takeaway card, Step 5 done w/ Try-again + Close).
+- `_EX_LESSON_MAP.grating` — `null` → `{ flowId:'grating-lobes', ... }`. Triggers splash-card enablement + 🎓 chip on EX4 button automatically (HU/HT-1 hooks).
+- `_HD_REGISTRY` — 6 new entries: `🎨 Color legend` (all-EX, toast), `🔁 Maze L2/L3 cycle`, `🎯 Maze Strict mode`, `🏹 Maze Roof 5°/7°/10°` (all maze-only).
+
+### New DOM
+
+- `<span class="lesson-chip">🎓</span>` added inside `#btn-grating` (CG).
+
+### New CSS
+
+- `#color-legend { display:none !important; }` (B9)
+- `#mz-settings { display:none !important; }` (B10)
+- `#wedge-mismatch-banner, #v1-mode-hint { border-radius:8px; padding:10px 13px; font-size:11px; line-height:1.5; margin-bottom:8px; }` (B11)
+
+### Touched files
+
+- `今日工作區/ut-scanner-v71.html` (renamed from v70; 5 features + 3 user-visible version strings + `__VERSION_DELTA__`)
+- `今日工作區/CLAUDE.md` (§222–§226)
+- `今日工作區/CHANGELOG.md` (this entry)
+
+### Notes
+
+- Puppeteer-verified per-EX drawer counts after v71: EX1=8 (was 7), EX4=9 (was 7, +Color Legend +Guided lesson), EX5=18 (was 11, +5 maze entries + Color Legend).
+- Puppeteer-verified EX4 splash card primary enabled (no longer "coming v69"). Splash 藍卡 點下 → `gw.open('grating-lobes')`.
+- Shadow contact-glow uses `ctx.scale(1, 0.32)` to flatten the radial gradient into an ellipse pinned to (txX, SURF_Y). Combined with the vertical trapezoid below it, the probe now reads as having a hard contact point that fades both laterally and downward — answering both "EX1 看不到" (visibility) and "EX2 固定看起來很假" (rooting).
+- B11 keeps banner DOM separate for now; CSS-only consolidation = banner consistency at low risk. Content-swap merge into one container deferred to a later ship.
+
+---
+
 ## v70 — 2026-05-31 EDT
 
 **Trigger:** user "OK 開始 v70" (relayed via "UT 繼續" after proposal-book v3 confirmation). v70 batch = B4 header de-bloat + B5 controls-row de-bloat + B6 couplant/material row hidden + ☰ toggle + B7 tools-panel fully retired + A3 beam edge triple-feather. Scope per v3 proposal book Lane B's expanded 11-item plan (B1–B3 already shipped v69) and Lane A's A3 physics polish.

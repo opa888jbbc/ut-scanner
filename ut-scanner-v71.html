@@ -279,7 +279,7 @@
 <meta charset="UTF-8">
 <!-- v50 α5 — removed user-scalable=no + maximum-scale to allow mobile pinch zoom -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>UT NDT Training Simulator — v70</title>
+<title>UT NDT Training Simulator — v71</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -898,12 +898,25 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
 /* v69 B3 forced the panel always-visible; v70 reverses to fully-hidden, since every button
    inside it is registered in _HD_REGISTRY and reachable via ☰. */
 .controls-row.tools-panel { display:none !important; }
+
+/* ──────────────────── v71 §224 B9 — color-legend chip retired (lives in ☰ Settings) ──────────────────── */
+#color-legend { display:none !important; }
+
+/* ──────────────────── v71 §225 B10 — maze ⚙ settings popup retired (☰ Settings handles L2L3/Strict/Roof) ──────────────────── */
+#mz-settings { display:none !important; }
+
+/* ──────────────────── v71 §226 B11 — unified teach-banner styling ──────────────────── */
+/* Three pre-v71 banner DOMs (#teach-banner / #wedge-mismatch-banner / #v1-mode-hint) had
+   their own inline / class styling. They now all inherit the same .teach-banner skin so a
+   future banner-content-swap refactor only needs to manage one container. */
+#wedge-mismatch-banner, #v1-mode-hint { border-radius:8px; padding:10px 13px; font-size:11px;
+  line-height:1.5; margin-bottom:8px; }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v70</span></h1>
+  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v71</span></h1>
   <span class="badge">Pulse-Echo</span>
   <span class="badge" id="freq-badge">5 MHz</span>
   <span class="badge ok" id="ex-badge">Exercise 1</span>
@@ -940,6 +953,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; h
     <span class="ex-num">EX 03</span><span class="ex-name">Weld Skew</span>
   </button>
   <button class="ex-btn" id="btn-grating" onclick="setExercise('grating')">
+    <!-- v71 §223 CG — lesson chip flags EX4 has a guided walkthrough now too. -->
+    <span class="lesson-chip" title="This exercise has a 5-step guided lesson">🎓</span>
     <span class="ex-num">EX 04</span><span class="ex-name">Grating Lobes</span>
   </button>
   <!-- v58 §87 CL — EX05 Corrosion Maze (top-down 2D scan game) -->
@@ -3334,22 +3349,26 @@ function drawScan() {
     } // v55 §58 BB-full — close !velCalMode branch
   }
 
-  // ── v69 §216 A2 (hotfix per user video 2026-05-31 EDT) — depth-fading directional shadow.
-  //    Original v69 implementation was a flat horizontal ellipse "on the floor" under the
-  //    probe; user fed back that the shadow should be a beam-direction soft column from the
-  //    probe extending DOWN into the workpiece and fading to fully transparent well before
-  //    the back wall ("照射下來應該要漸漸消失才對而不是穿透到底部"). Now uses a vertical
-  //    linear gradient + a cone-narrowing trapezoid path. EX5 maze still skipped (top-down).
+  // ── v71 §222 A2.2 — Shadow rework per user 2026-05-31 EDT feedback on v70.
+  //    EX1 reported as "什麼都沒有" (invisible), EX2 as "固定在那邊看起來很假" (static / fake).
+  //    Three changes: (1) base alpha 0.17 → 0.30 so the column is clearly readable on the dark
+  //    surface, (2) extra +0.10 alpha boost while the user is actively dragging the probe so
+  //    the contact "press" is felt, (3) a radial contact glow at the exact probe footprint
+  //    (SURF_Y) on top of the vertical column — gives a hard contact point that fades laterally,
+  //    making the shadow feel "rooted" to the probe rather than floating.
   if (exercise !== 'maze' && typeof MAT_X === 'number' && typeof MAT_Y === 'number') {
+    var isDragging = (typeof dragging !== 'undefined' && dragging);
+    var topA  = isDragging ? 0.40 : 0.30;
+    var midA  = isDragging ? 0.18 : 0.12;
     var sxc   = txX;
     var sTopY = SURF_Y;                    // start at workpiece surface
     var sBotY = MAT_Y + MAT_H * 0.55;      // fully transparent by 55 % depth — never touches back wall
-    var sTopW = TX_W * 0.85;               // top width — slightly narrower than probe
-    var sBotW = TX_W * 0.35;               // bottom width — soft cone convergence
+    var sTopW = TX_W * 0.95;               // wider top — matches probe footprint better
+    var sBotW = TX_W * 0.30;               // narrows down → reads as a beam-influenced shadow
     var sg = ctx.createLinearGradient(sxc, sTopY, sxc, sBotY);
-    sg.addColorStop(0.0,  'rgba(0,0,0,0.17)');
-    sg.addColorStop(0.45, 'rgba(0,0,0,0.06)');
-    sg.addColorStop(1.0,  'rgba(0,0,0,0.00)');
+    sg.addColorStop(0.00, 'rgba(0,0,0,' + topA + ')');
+    sg.addColorStop(0.35, 'rgba(0,0,0,' + midA + ')');
+    sg.addColorStop(1.00, 'rgba(0,0,0,0.00)');
     ctx.save();
     ctx.fillStyle = sg;
     ctx.beginPath();
@@ -3359,6 +3378,18 @@ function drawScan() {
     ctx.lineTo(sxc - sBotW / 2, sBotY);
     ctx.closePath();
     ctx.fill();
+    ctx.restore();
+    // Contact-point radial glow — a flat ellipse anchored at the surface that "roots" the shadow
+    // visually to the probe foot. Scales laterally so it reads even when the probe is stationary.
+    var glowR = TX_W * 0.55;
+    var glow  = ctx.createRadialGradient(sxc, sTopY, 0, sxc, sTopY, glowR);
+    glow.addColorStop(0,   'rgba(0,0,0,' + (isDragging ? 0.32 : 0.22) + ')');
+    glow.addColorStop(0.6, 'rgba(0,0,0,0.06)');
+    glow.addColorStop(1,   'rgba(0,0,0,0.00)');
+    ctx.save();
+    ctx.translate(sxc, sTopY); ctx.scale(1, 0.32); ctx.translate(-sxc, -sTopY);
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(sxc, sTopY, glowR, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
@@ -5449,7 +5480,7 @@ function exportScanPlan(){
   md += '- **Display mode:** ' + (advancedMode ? 'ADVANCED' : 'BASIC') + ' / ' + learnMode.toUpperCase() + '\n';
   md += '- **Probe position X:** ' + Math.round((txX-MAT_X)/MAT_W*240) + ' mm\n';
   md += '- **Sound-path range:** 0..200 mm\n';
-  md += '- **Generated by:** UT NDT Trainer v70\n';
+  md += '- **Generated by:** UT NDT Trainer v71\n';
   // v59 §99 CX — append Corrosion Maze score if a round has been revealed.
   if (mazeScore) {
     var hrPct = (mazeScore.hitRate*100).toFixed(0);
@@ -5962,6 +5993,90 @@ var GW_FLOWS = {
         body: 'You learned how to capture a reference peak, find the half-amplitude points on either side of a reflector, and read your measured size against the actual size. You also saw why the 6 dB drop technique is limited by the beam width.',
         render: function(state){
           return '<button class="gw-cta gw-cta--green" onclick="gw.goto(0); gw.state = {}; gw.canvasMarks = [];">↺ Try again</button>'+
+                 '<button class="gw-cta gw-cta--red-filled" onclick="gw.close()">✓ Complete and Continue</button>';
+        }
+      }
+    ]
+  },
+  // v71 §223 CG — EX04 (PAUT grating lobes) 4-step guided walkthrough. User asked EX4 to have
+  // the same kind of lesson EX2 has. State drivers are pitchMm (slider 0.30 .. 2.00 mm) and
+  // nElements (4 .. 32). Physics: d/λ ≤ 0.5 → main lobe only; d/λ > 0.5 → grating lobes
+  // appear; larger N → main-lobe full-width ≈ λ/(N·d) narrows.
+  'grating-lobes': {
+    title: 'Guided Walkthrough · PAUT Grating Lobes',
+    exercise: 'grating',
+    steps: [
+      { // Step 1 — set element pitch small (d/λ ≤ 0.5).
+        num: 1,
+        title: 'Set the element pitch to the design target',
+        body: 'In the PAUT array, the <b>element pitch</b> <code>d</code> is the distance between neighbouring crystals. The Bragg condition <code>sin θ = m · λ/d</code> tells us that <b>grating lobes</b> appear at any angle once <code>d/λ &gt; 0.5</code>. The classical design target is therefore <b>d/λ ≤ 0.5</b>. Drag <b>ELEMENT PITCH</b> down until the readout shows <code>d/λ ≤ 0.5</code>, then press <b>Confirm</b>.',
+        cta: { label: 'Confirm d/λ ≤ 0.5', color: 'green' },
+        onSubmit: function(state){
+          var lam = (typeof materialC !== 'undefined' ? materialC : 5.9) / freq;
+          var ratio = pitchMm / lam;
+          if (ratio <= 0.5) {
+            state.designPitch = pitchMm;
+            state.designRatio = ratio;
+            return { ok:true, msg:'<b>Locked in.</b> Current d/λ = <b>' + ratio.toFixed(2) + '</b> — you should see only the green main lobe (m = 0) on the polar plot.' };
+          }
+          return { ok:false, msg:'<b>Not yet.</b> Your d/λ is currently <b>' + ratio.toFixed(2) + '</b>. Pull the ELEMENT PITCH slider <b>down</b> until d/λ ≤ 0.50, then click <b>Confirm</b>.' };
+        }
+      },
+      { // Step 2 — increase pitch until grating lobes appear.
+        num: 2,
+        title: 'Push the pitch past d/λ = 0.5 — watch grating lobes wake up',
+        body: 'Now slowly drag the pitch slider <b>up</b>. As soon as <code>d/λ &gt; 0.5</code> the first pair of grating lobes (m = ±1) light up in red. Stop when both grating lobes are clearly visible, then press <b>Confirm</b>.',
+        cta: { label: 'Confirm grating lobes appear', color: 'purple' },
+        onSubmit: function(state){
+          var lam = (typeof materialC !== 'undefined' ? materialC : 5.9) / freq;
+          var ratio = pitchMm / lam;
+          if (ratio > 0.55) {
+            state.gratingRatio = ratio;
+            return { ok:true, msg:'<b>Grating lobes confirmed.</b> d/λ = <b>' + ratio.toFixed(2) + '</b> &gt; 0.5 → m = ±1 lobes are now part of the beam pattern. In a real inspection, echoes coming back through these side angles would be mistaken for real reflectors.' };
+          }
+          return { ok:false, msg:'<b>Not yet.</b> Your d/λ is <b>' + ratio.toFixed(2) + '</b>. Push the pitch slider up until d/λ ≥ ~0.55 so the side lobes clearly appear.' };
+        }
+      },
+      { // Step 3 — increase N elements to narrow main lobe.
+        num: 3,
+        title: 'Increase the element count — the main lobe should narrow',
+        body: 'The main-lobe full-width is approximately <code>λ/(N · d)</code>. Drag <b>N ELEMENTS</b> up to at least <b>16</b> and watch the green main lobe narrow on the polar plot. Press <b>Confirm</b> when N ≥ 16.',
+        cta: { label: 'Confirm N ≥ 16', color: 'purple' },
+        onSubmit: function(state){
+          if (nElements >= 16) {
+            state.bigN = nElements;
+            return { ok:true, msg:'<b>Sharper beam.</b> N = <b>' + nElements + '</b>. Each extra element narrows the main lobe and improves angular resolution — the trade-off is electronics cost and probe size.' };
+          }
+          return { ok:false, msg:'<b>Not yet.</b> N is currently <b>' + nElements + '</b>. Drag N ELEMENTS up to at least 16.' };
+        }
+      },
+      { // Step 4 — review / takeaway.
+        num: 4,
+        title: 'Review · grating-lobe design rules',
+        body: 'You saw the Bragg condition in action and the directivity / N trade-off.',
+        render: function(state){
+          var designR = (state.designRatio || 0).toFixed(2);
+          var gratR   = (state.gratingRatio || 0).toFixed(2);
+          var bigN    = state.bigN || nElements;
+          return '<div class="gw-result-row">'+
+                   '<div class="gw-result-card"><div class="gw-result-label">Safe design d/λ</div><div class="gw-result-value">' + designR + '</div></div>'+
+                   '<div class="gw-result-card"><div class="gw-result-label">Lobes appear at d/λ</div><div class="gw-result-value">' + gratR + '</div></div>'+
+                 '</div>'+
+                 '<div class="gw-takeaway">' +
+                   '<div class="gw-takeaway-hd">📚 Take-away</div>' +
+                   '<b>Design rule:</b> keep <code>d ≤ λ/2</code> to avoid grating lobes (m = 0 only).<br>' +
+                   '<b>Resolution rule:</b> main-lobe full-width ≈ <code>λ/(N · d)</code>. More elements ⇒ narrower beam, but each one adds channels, weight and cost.<br>' +
+                   '<b>Why it matters:</b> in real PAUT inspection, undetected grating lobes can create <i>phantom indications</i> at side angles — the operator sees a peak that does not correspond to any real reflector. With the design rule above you stay grating-lobe-free across the full sector you scan.' +
+                 '</div>'+
+                 '<div class="gw-cta-row"><button class="gw-cta gw-cta--blue" onclick="gw.next()">Next Step →</button></div>';
+        }
+      },
+      { // Step 5 — done.
+        num: 5,
+        title: 'Done — PAUT grating-lobe lesson complete',
+        body: 'You designed a grating-lobe-free array, then deliberately broke the rule and watched the side lobes appear. You also saw how N controls main-lobe sharpness.',
+        render: function(state){
+          return '<button class="gw-cta gw-cta--green" onclick="gw.goto(0); gw.state = {};">↺ Try again</button>'+
                  '<button class="gw-cta gw-cta--red-filled" onclick="gw.close()">✓ Complete and Continue</button>';
         }
       }
@@ -6632,12 +6747,13 @@ if (savedMode === 'quiz') {
 // runSmokeTests audits that each code appears as a `§N XX —` comment in the page
 // HTML (proves the touch point is tagged); missing codes log a banner warning.
 var __VERSION_DELTA__ = Object.freeze({
-  version: 'v70',
-  // v70 ships 5 rules per the v3 proposal book (aggressive button consolidation + start of
-  // physics polish). B4 (header de-bloat: 5 badges hidden), B5 (controls-row de-bloat:
-  // PEAK HOLD + DAC + Reset hidden), B6 (couplant + material row hidden + ☰ toggle),
-  // B7 (tools-panel hidden — drawer is the only path), A3 (beam cone edge soft gradient).
-  ruleCodes: ['B4','B5','B6','B7','A3']
+  version: 'v71',
+  // v71 ships 5 rules per user feedback on v70 (shadow not visible enough + EX4 wants its
+  // own guided lesson + keep consolidating buttons). A22 (shadow rework — visible + dynamic
+  // dragging response + surface contact glow), CG (EX4 grating-lobes 4-step guided lesson),
+  // B9 (color-legend chip removed; entry in ☰ Settings), B10 (maze ⚙ settings popup retired;
+  // L2/L3 + Strict + Roof become ☰ entries), B11 (3 teach banners unified into one DOM).
+  ruleCodes: ['A22','CG','B9','B10','B11']
 });
 // v66 §196 GQ — the rule-code audit serialises the whole document (innerHTML) and regex-tests
 // each code. The HTML never changes after load, so cache the result and skip the expensive
@@ -6700,7 +6816,7 @@ function runSmokeTests(){
   // v66 §200 GU — the hand-maintained ruleCodes list must match the count of rules adopted
   // for this ship. v67 adopts 3 D-area rules (HQ/HR/HS); update this expected count per ship.
   ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 5, __VERSION_DELTA__.ruleCodes.length);
-  ok('v70 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'B4,B5,B6,B7,A3');
+  ok('v71 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'A22,CG,B9,B10,B11');
   // v67 §205 HR — guided-walkthrough framework is wired to window.gw with the expected API.
   ok('gw.open exposed',         typeof window.gw === 'object' && typeof window.gw.open === 'function');
   ok('gw close/back/submit',    typeof window.gw.close === 'function' && typeof window.gw.back === 'function' && typeof window.gw.submit === 'function');
@@ -6861,7 +6977,18 @@ var _HD_REGISTRY = [
   { section:'Tools',       label:'🔄 New maze',           exs:'maze',  onClick:function(){ newMaze(); } },
   { section:'Settings',    label:'BASIC ↔ ADVANCED',     exs:'*',     onClick:function(){ toggleMode(); } },
   { section:'Settings',    label:'TUTORIAL ↔ QUIZ',      exs:'*',     onClick:function(){ toggleLearnMode(); } },
-  { section:'Settings',    label:'🌙 Dark ↔ Light theme', exs:'*',     onClick:function(){ toggleTheme(); } }
+  { section:'Settings',    label:'🌙 Dark ↔ Light theme', exs:'*',     onClick:function(){ toggleTheme(); } },
+  // v71 §224 B9 — color legend that used to live as an always-visible chip row.
+  { section:'Settings',    label:'🎨 Color legend',       exs:'*',
+    onClick:function(){
+      showToast('● 5 MHz orange · ● 10 MHz cyan · ● defect / alarm red · ● safe green · ● back-wall / warn yellow · ● skew / PAUT purple.', 5500);
+    }, title:'Quick reference for what each colour means' },
+  // v71 §225 B10 — maze ⚙ settings popup retired; its three toggles become first-class ☰ entries.
+  { section:'Settings',    label:'🔁 Maze · L2/L3 cycle', exs:'maze',  onClick:function(){ toggleMazeMultiBounce(); }, title:'Cycle L2/L3 multi-bounce: follow → ON·lock → OFF·lock → follow' },
+  { section:'Settings',    label:'🎯 Maze · Strict mode', exs:'maze',  onClick:function(){ toggleMazeStrict(); },      title:'Tighten marker tolerance 10 mm → 5 mm (Level 2 standard)' },
+  { section:'Settings',    label:'🏹 Maze · Roof 5°',     exs:'maze',  onClick:function(){ setMazeDualRoof(5); },      title:'SE-series dual roof — bias +1.1 %' },
+  { section:'Settings',    label:'🏹 Maze · Roof 7°',     exs:'maze',  onClick:function(){ setMazeDualRoof(7); },      title:'Standard dual roof — bias +2.0 %' },
+  { section:'Settings',    label:'🏹 Maze · Roof 10°',    exs:'maze',  onClick:function(){ setMazeDualRoof(10); },     title:'SDR-series dual roof — bias +4.0 %' }
 ];
 var _HD_SECTIONS = ['Probe','Calibration','Sizing','Tools','Settings'];
 function openHamburger(){
@@ -6972,9 +7099,10 @@ _applyExFilter(exercise);
 var _EX_LESSON_MAP = {
   // ex → { flowId, title, sub } if guided lesson exists; null → disabled "coming" card.
   resolution:  null,
-  penetration: { flowId:'6db-sizing', title:'Guided · 6 dB Drop Sizing', sub:'5-step walkthrough · recreates the Teachable lesson video' },
+  penetration: { flowId:'6db-sizing',    title:'Guided · 6 dB Drop Sizing',         sub:'5-step walkthrough · recreates the Teachable lesson video' },
   weld:        null,
-  grating:     null,
+  // v71 §223 CG — EX4 (grating lobes) now has its own 5-step walkthrough.
+  grating:     { flowId:'grating-lobes', title:'Guided · PAUT Grating Lobes',       sub:'5-step walkthrough · Bragg condition + N-elements trade-off' },
   maze:        null
 };
 var _EX_FREE_PLAY_SUB = {

@@ -735,6 +735,40 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 
 
 
+（以下規則 222\~226 由使用者於 2026-05-31 EDT v70 ship 後回饋(EX1 陰影「什麼都沒有」/ EX2 「固定看起來很假」/ EX4 要 guided lesson / 自行決定繼續收按鈕) 後納入。v71 ship 範圍 = A2.2(shadow rework)+ CG(EX4 grating-lobes 引導課)+ B9(color-legend 退場)+ B10(maze ⚙ popup 退場)+ B11(三 banner CSS 統一)= 5 條。)
+
+
+
+222\. 【A2.2 · 探頭陰影 visibility + 動態回應 rework】v70 §216 的 trapezoid shadow alpha 0.17 太淡,使用者反映 EX1「什麼都沒有」、EX2「固定看起來很假」。v71 三段強化:
+  - **base alpha 0.17 → 0.30**(top stop)、0.06 → 0.12(mid stop)、0.00(bot stop)— 在深色 surface 上仍清晰可讀
+  - **dragging boost** — 當 `dragging === true` 時 top alpha 0.30 → 0.40、mid 0.12 → 0.18,讓拖曳時的 "press" 感受得到
+  - **surface contact glow**(新)— 在 `(txX, SURF_Y)` 加 radial gradient(`glowR = TX_W × 0.55`,scaleY 0.32 壓扁成扁橢圓)alpha 0.22(靜止)/ 0.32(拖曳),把 vertical shadow 視覺「釘」在探頭腳印,不再像是漂浮的形狀
+  - 整體仍維持 v69 hotfix 的「絕不延伸到 back wall」(sBotY = MAT_Y + MAT_H × 0.55)+ 「EX5 maze 跳過」原則
+
+223\. 【CG · EX04 PAUT Grating Lobes 引導課(5 步)】呼應使用者「EX4 也要 EX2 那種教學」需求。沿用 §205 HR 框架新增 `GW_FLOWS['grating-lobes']`:
+  - **Step 1 · Confirm d/λ ≤ 0.5**(綠 CTA)— 學生拖 pitch slider 下降,直到 `pitchMm / (materialC/freq) ≤ 0.5`,submit 通過後 state.designPitch + designRatio 寫入
+  - **Step 2 · Push past d/λ > 0.55 — grating lobes appear**(紫 CTA)— 拖 pitch 上升,通過時 state.gratingRatio 寫入
+  - **Step 3 · N ≥ 16 — main lobe 變窄**(紫 CTA)— 拖 N elements slider,通過時 state.bigN 寫入
+  - **Step 4 · Review** — 兩張大數字卡(safe design d/λ vs 啟動 lobes 的 d/λ)+ 教學要點(Bragg 設計 / N 解析度規則 / 為何重要),藍 Next CTA
+  - **Step 5 · Done** — Try again / Close 兩按鈕
+  - `_EX_LESSON_MAP.grating` 由 null 改為 `{ flowId:'grating-lobes', title:..., sub:... }`,EX4 splash card 自動啟用、按鈕 🎓 chip 自動掛
+  - 維持「不做教學工具」原則(per [[no-teacher-tools]]):此處仍屬「學生可玩的 NDT 技術內容」,非教師端工具
+
+224\. 【B9 · color-legend chip retired into ☰ Settings】`#color-legend` 那條常駐 6 色 chip 行的視覺價值低、垂直空間貴。v71 直接 `#color-legend { display:none !important; }`,並在 ☰ Settings 加「🎨 Color legend」entry,點按跳 5.5 秒 toast 列出當前所有顏色語意。
+
+225\. 【B10 · maze ⚙ settings popup retired into ☰ Settings】EX5 maze 原本 `<details id="mz-settings">` 是個「展開後浮動的 popup」,當初設計是為節省 narrow screen 寬度,但 v71 既然走 ☰ 收編路線就重複了。v71:
+  - CSS `#mz-settings { display:none !important; }` 整段 popup 隱藏
+  - `_HD_REGISTRY` 加 5 個 maze-only entries(`exs:'maze'`)到 ☰ Settings:🔁 L2/L3 cycle / 🎯 Strict mode / 🏹 Roof 5° / 🏹 Roof 7° / 🏹 Roof 10°
+  - 三個 toggle 函式(toggleMazeMultiBounce / toggleMazeStrict / setMazeDualRoof)原樣呼叫,內部 visual 仍正常更新
+  - EX5 ☰ 抽屜總數 11 → 18 項(B9 新增 1 + B10 新增 5 + 原本 1 個 Roof toggle 沿用 → puppeteer verified)
+
+226\. 【B11 · 3 個 teach-banner CSS 統一】`#teach-banner` 用 `.teach-banner` class,但 `#wedge-mismatch-banner` 與 `#v1-mode-hint` 是 inline style 各做各的(border-radius / padding / font-size / margin 全不一致)。v71 加 CSS:
+  - `#wedge-mismatch-banner, #v1-mode-hint { border-radius:8px; padding:10px 13px; font-size:11px; line-height:1.5; margin-bottom:8px; }`
+  - 三個 banner 的形狀現在統一,日後合併進「one container + content swap」refactor 比較簡單
+  - 內容 swap logic 留 v72+(本版只先打通 CSS 一致性)
+
+
+
 遠端開發生產與「模糊歷史掃描」規範（加拿大時間基準）
 
 
