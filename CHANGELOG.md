@@ -10,6 +10,40 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ---
 
+## v76 — 2026-06-02 EDT
+
+**Trigger:** user "先把我說的陰影的部分處理好其他的先不動" with annotated screenshot `uploads/螢幕擷取畫面 2026-06-02 023101.png` showing purple paint over the cone region below the EX01 porosity cluster (= "this region should be dark / shadowed but it's currently bright"). v75's SH4/SH6 rules explicitly excluded EX01 with the comment "pore 體積散射不擋 beam, 無 cut" — that was a scope error. Pores DO attenuate beam through volumetric scattering. v76 fixes the scope only; no other changes.
+
+### New rule (CLAUDE.md §242)
+
+| §   | Code  | Theme                                  | One-liner |
+|-----|-------|----------------------------------------|-----------|
+| 242 | SH7   | SH4/SH6 scope extended to EX01 porosity | drawStandardBeam hasCut detection adds EX01 branch; max-sen pore drives beamCutY + larger fade band |
+
+### Modified functions
+
+- `drawStandardBeam` (SH7) — hasCut/beamCutY/defectR_px computation refactored. New `else if (exercise === 'resolution' && PORES.length > 0)` branch iterates pores, finds max-sensitivity in-beam pore (same `1 - |txX - poreX|/beamHW` model as the pore drawing loop), sets `hasCut=true / beamCutY=that pore's Y / defectR_px=pore radius`. SH4 fade band + SH6 ghost taper code paths unchanged — EX01 inherits the visual automatically.
+
+### Smoke tests
+
+- `ruleCodes.length === 1` / `ruleCodes === 'SH7'`
+- `SH7 EX01 sen calc valid`: probe over first pore → sen=1 > 0.10 (triggers); probe one beamHW away → sen=0 ≤ 0.10 (does not trigger). Validates the threshold geometry.
+
+### Touched files
+
+- `今日工作區/ut-scanner-v76.html` (renamed from v75; SH7 patch + 3 user-visible version strings + `__VERSION_DELTA__`)
+- `今日工作區/CLAUDE.md` (§242 + §239 SH4 / §241 SH6 適用範圍註記修正)
+- `今日工作區/CHANGELOG.md` (this entry)
+- `今日工作區/AI優化與改善建議書.md` (SH7 marked ✅ shipped v76)
+
+### Notes
+
+- This is a hotfix-of-hotfix. v75 shipped SH4/SH5/SH6 but excluded EX01 from SH4/SH6. The user's earlier "OK SH4-SH6 全採" was intended to cover EX01 (their original message said "ex1,2") — my scope decision in v75 was wrong.
+- §3 collision-truncation rule unchanged — SH7 just extends what counts as a "collision" from planar reflectors (SDH/crack) to volumetric scatterers (pore cluster).
+- SH5 cyan reflection wave on EX01 pores was already shipped in v75 (per-pore ripple in pore loop); v76 only fixes the beam-shadow side of the equation.
+
+---
+
 ## v75 — 2026-06-01 EDT
 
 **Trigger:** user "OK SH4-SH6 全採" adopting all 3 hotfix entries from the proposal book. Source: `uploads/2026-06-01-09-36-19.mp4` (Teachable Step 1/5 walkthrough). User comparison: "ex1,2 的聲波正常來說照到 crack 應該要像它一樣漸漸消失才對, 而不是像 ex2 那樣直接消失". The video shows three visible elements missing from sim: (a) horizontal cyan reflection wave along crack surface, (b) smooth beam fade rather than hard cut, (c) beam continuing past crack to back wall. v75 patches all three in `drawStandardBeam` + EX01/EX02 defect loops.
