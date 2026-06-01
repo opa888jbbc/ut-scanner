@@ -10,97 +10,87 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ---
 
-## v73 — 2026-05-31 EDT
+## v74 — 2026-06-01 EDT
 
-**Trigger:** Boss-flagged screenshot (EX01, 5 MHz porosity cluster, red-circled region): probe vertical shadow penetrating below the blue porosity defects — physically wrong, should be blocked at the defect. Boss command: "改完這個問題之後 UT73 版本繼續". v73 ships the SH hotfix only; the planned v73 main (P1+P2+P3+N1+K2) is bumped to v74.
+**Trigger:** user "OK M5 全採 → 繼續 74 版本" adopting all 9 Module-5 entries from the proposal book. Boss separately stipulated "Module 5 是浸水式所以呈現的方式要更有邏輯 — 知識庫內找資料". v74 ships the immersion-coherent batch (5 of the 9 M5 entries: M5-5, M5-6, M5-7, M5-8, M5-9); v75 will ship the remaining 4 (M5-1 PE/PC/TT selector, M5-2 EX07 PC, M5-3 PC sensitive zone, M5-4 EX08 TT). Physics source = Vault `wiki/ut-immersion.md` (4 sub-modes matrix, water-path formula `WP_min = t × c_water / c_steel`, FS echo 88 % reflection, focused probe trade-offs).
 
-### New rules (CLAUDE.md §231–§233)
+### New rules (CLAUDE.md §234–§238)
 
-| §   | Code | Theme                                  | One-liner |
-|-----|------|----------------------------------------|-----------|
-| 231 | SH1  | Shadow-clip at defect + smoothstep tail | Trapezoid bot Y clipped to shallowest in-column defect upper edge; 0.6r smoothstep falloff inside the defect avoids hard-cut look |
-| 232 | SH2  | Shallowest-first occlusion              | When multiple defects sit inside the column, only the shallowest one occludes — deep defects are visually hidden behind shallow ones (optical intuition) |
-| 233 | SH3  | Column half-width interp                | Defect must sit within `halfWidth(y) + r` of probeX (linear interp top→bot 0.95→0.30 × TX_W / 2) to be an occlusion candidate — prevents stray side defects from clipping |
-
-### New / modified functions
-
-- `_findShadowOcclusion(probeX, exerciseName, sTopY, sBotY, sTopW, sBotW)` — NEW (drawScan-adjacent). Returns shallowest in-column defect `{x, y, r}` or null. Filters per exerciseName: 'porosity' → PORES (5 pores, r ≈ MAT_W × 0.012), 'penetration' → 4 SDH, 'weld' → WELD_CRACKS (3 cracks). EX04 grating / EX05 maze return null (out of scope per §231 SH1).
-- Shadow block in `drawScan` — REPLACED. Calls `_findShadowOcclusion`; on hit, clips trapezoid bot Y to `defect.y − defect.r` and renders a 6-stop smoothstep fade-out polygon from clip to `clip + 0.6·r`. End alpha of the main trapezoid is `midA × 0.5` when occluded (not 0) so the fade-out picks up smoothly. EX04 added to the skip list alongside maze.
-- `__VERSION_DELTA__` — version bumped to 'v73', ruleCodes now `['SH1','SH2','SH3']`.
-
-### Smoke test updates
-
-- `ruleCodes count matches ship` expectation: 4 → 3.
-- New `SH1 _findShadowOcclusion fn` typeof check.
-- New `SH2 shallowest-first` — stubs MAT_X/Y/W/H + PORES at 3 depths, asserts y=60 (shallowest) is picked.
-- New `SH3 column-width interp` — verifies offset-x defect at deep position outside column gets `null`, offset-x defect at shallow position inside column gets non-null.
-- v72 carry-over checks (L1 inertia / L3 vibration / U2 alarm / U3 transition) all retained to guard regression.
-- Smoke result: **48 / 48 pass** verified via puppeteer headless on `file://` v73.html.
-
-### Touched files
-
-- `今日工作區/ut-scanner-v73.html` (created from v72.html — 7544 lines + helper + smoke = ~7600)
-- `今日工作區/CLAUDE.md` (§231–§233 inserted before "遠端開發生產 與「模糊歷史掃描」規範")
-- `ut-scanner-github/ut-scanner-v72.html` removed; v73.html added.
-- `ut-scanner-github/CLAUDE.md` synced.
-- `今日工作區/AI優化與改善建議書.md` — SH hotfix proposal at top, marked accepted.
-
-### Visual verification (puppeteer screenshots, `今日工作區/uploads/v73_test/`)
-
-- `ex01_over_porosity.png` — probe at rx=0.50 (centre porosity cluster): shadow column truncated at the pore upper edge. ✓
-- `ex01_off_porosity.png` — probe at rx=0.85 (right of cluster): shadow extends down to v71's 55 % depth (no occlusion). ✓
-- `ex02_over_ref_sdh.png` — probe at rx=0.30 (over Ref SDH @ 50 mm): shadow column visibly stops at SDH top edge, doesn't reach back wall. ✓
-- `ex05_maze.png` — top-down maze view, no vertical shadow rendered (`exercise !== 'maze'` skip). ✓
-
----
-
-## v72 — 2026-05-31 EDT
-
-**Trigger:** post-v71 six-lens proposal — user accepted "L1 + L3 + U2 + U3 (4 條,跳過 L2 音效)" from the rewritten v71-baseline proposal book. Theme: student-perspective immersion (probe inertia, mobile haptics) + UI alarm escalation + EX-switch continuity.
-
-### New rules (CLAUDE.md §227–§230)
-
-| §   | Code  | Theme                       | One-liner |
-|-----|-------|-----------------------------|-----------|
-| 227 | L1    | Probe inertia + bounce      | Drag release → glide with 0.92 damping; elastic bounce 30 % off MAT boundaries; maze 2-axis, standard 1-axis |
-| 228 | L3    | Mobile haptics              | navigator.vibrate 30 ms D-peak ≥50 %, 100 ms ALARM, 50 ms maze thin spot; ☰ Settings toggle; iOS silent-fail |
-| 229 | U2    | ALARM viewport glow         | gate-alert.trig rising edge → 0.6 s inset red box-shadow pulse on body::before, pointer-events:none |
-| 230 | U3    | EX-switch transition        | setExercise wraps with 0.4 s slide+fade on .ex-content-host (out 200 ms → swap → in 200 ms); lock absorbs rapid re-clicks |
+| §   | Code  | Theme                          | One-liner |
+|-----|-------|--------------------------------|-----------|
+| 234 | M5-5  | EX06 Immersion basis           | Probe-above-water + 4-peak A-scan (IP→FS→D→BW) + WP slider 5-50 mm + IF gate band + FS₂ overlap warn |
+| 235 | M5-6  | Wheel sub-mode                 | Rolling rubber-tyre housing (water inside) + spinning spokes + hybrid badge |
+| 236 | M5-7  | Bubbler + Squirter sub-modes   | Bubbler short column with rising bubbles · Squirter long high-pressure jet with speed streaks + lateral spray fringe |
+| 237 | M5-8  | Acoustic Impedance Z + R/T     | Live Z = ρ × c · R/T at water-material interface; follows material selector via density-by-c lookup |
+| 238 | M5-9  | ex-bar Module 5 grouping       | Vertical "M5 · TECHNIQUES" dashed-bordered label between EX05 and EX06; sky-blue accent |
 
 ### New / modified functions
 
-- `_pushDragTrail` / `_startInertiaFromTrail` / `_applyProbeInertia` — NEW. L1 inertia state machine. Called from loop() before drawScan; reads/mutates txX/txY/inertiaVx/inertiaVy.
-- `loop()` — gains `_applyProbeInertia()` as first call.
-- mousedown / mouseup / mouseleave / touchstart / touchend handlers — reset trail on press, start inertia on release.
-- `_vibrate(ms)` / `toggleHaptics()` — NEW. L3 vibration helper + persistent toggle.
-- `_alarmPulseTrigger()` — NEW. U2 viewport edge red glow trigger; adds + removes `body.alarm-pulse` for 0.6 s.
-- gate-alert block in `drawAscan` — adds D-peak ≥50 % rising-edge L3 vibrate; ALARM rising edge fires L3 + U2; clear path resets `_hapticsLastAlarmTrig`.
-- `drawMazeAscan` — adds maze thin-spot rising-edge L3 vibrate (thinAmount > 0.5 up-cross).
-- `setExercise(ex)` — REPLACED. Now a transition orchestrator. Original body moved into `_setExerciseCore(ex)`. Calls `_onExChanged` inside the +200 ms callback to sync mobile-bar refresh with the visible content swap.
+- `setImmersionSubMode(mode)` — NEW (M5-6 / M5-7): switches between 4 sub-modes; updates button classes + fires explanatory toast
+- `onWpChange()` — NEW (M5-5): WP slider input handler; updates `wp-val` chip + recomputes overlap warning
+- `_immersionCriticalWpMm()` — NEW (M5-5 / M5-8): `IMMERSION_THICKNESS_MM × (C_WATER_M_S / (materialC × 1000))` per Vault formula
+- `_updateImWpWarning()` — NEW (M5-5): shows / hides the red "FS 2nd echo before BW" banner based on slider vs critical
+- `updateImpedancePanel()` — NEW (M5-8): live Z + R/T calc; hooked into `setMaterial()` so material switching ripples through immediately
+- `drawImmersionScene(ctx)` — NEW (M5-5 / M5-6 / M5-7): side-view scan canvas; calls `_drawImmersionCoupling()` for sub-mode visuals and `_drawImmersionProbe()` for suspended probe
+- `_drawImmersionCoupling(ctx, x, probeFaceY, wpPx)` — NEW (M5-6 / M5-7): 4 sub-mode water column rendering (tank full bath / wheel tyre + spokes / bubbler nozzle + bubbles / squirter long jet + spray)
+- `_drawImmersionProbe(ctx, x, y)` — NEW (M5-5): dark-grey probe block with cyan active-face glow
+- `drawImmersionAscan(ctx, W, H)` — NEW (M5-5): standalone immersion A-scan (μs time domain) with 4 peaks, IF gate band, FS₂ overlap visual marker
+- `drawScan` — modified (M5-5): early-returns to `drawImmersionScene` for EX06
+- `drawAscan` — modified (M5-5): early-returns to `drawImmersionAscan` for EX06
+- `_setExerciseCore` — modified (M5-5 / M5-9): handles `'immersion'` branch, sets button className, shows / hides immersion controls, centres probe horizontally on first entry, calls impedance panel update
+- `setMaterial` — modified (M5-8): calls `updateImpedancePanel()` after materialC update
+- `resetExercise` — modified (M5-5): resets WP slider to 35 mm + sub-mode to 'tank' when EX06 is active
+- `runSmokeTests` — `ruleCodes.length === 5` count + ship is `'M5-5,M5-6,M5-7,M5-8,M5-9'`; 10 new asserts for immersion plumbing (drawImmersionScene fn / drawImmersionAscan fn / onWpChange fn / WP default safe / setImmersionSubMode fn / 4 sub-modes present / invalid sub-mode rejected / updateImpedancePanel fn / steel R≈88% / critical WP formula)
 
-### New DOM IDs / classes
+### New DOM
 
-- `<div class="ex-content-host" id="ex-content-host">` — wraps `#ex-splash-wrap` + `#ex-desc` + `#gw-panel` so U3 transition only animates the per-EX content layer (canvas/ascan/HUD stay still).
-- `.ex-transitioning-out` / `.ex-transitioning-in` — CSS animation classes applied by setExercise transition orchestrator.
-- `body.alarm-pulse` + `body.alarm-pulse::before` — U2 viewport edge red glow overlay.
+- `<button id="btn-immersion">` — EX06 ex-bar button with 💧 Immersion label (M5-5)
+- `<span class="ex-group-label">M5 · TECHNIQUES</span>` — vertical grouping divider between EX05 and EX06 (M5-9)
+- `<div id="immersion-controls">` — collapsible controls bar (M5-5 / M5-6 / M5-7 / M5-8) containing:
+  - 4 × `.im-mode-btn` (im-mode-tank / im-mode-wheel / im-mode-bubbler / im-mode-squirter)
+  - `<input id="wp-slider" min="5" max="50" value="35">` + `<span id="wp-val">35 mm</span>`
+  - `<span id="im-impedance-z">` + `<span id="im-impedance-rt">` (M5-8 Z and R/T chips)
+  - `<div id="im-wp-warning">` (M5-5 FS₂ overlap banner)
 
-### New localStorage keys
+### New CSS
 
-- `LS_KEYS.HAPTICS = 'ut_haptics'` (value: `'on'` | `'off'`; mode `'string'`)
+- `.ex-btn.active-immersion` + sky-blue (#1e90ff) hue (M5-5)
+- `.ex-group-label` + `.theme-light .ex-group-label` — vertical writing-mode dashed-bordered grouping divider (M5-9)
+- `.immersion-controls{ .visible }` + `.im-group` + `.im-mode-btn{ :hover, .active }` + `#wp-slider` + `#wp-val` + `.im-stat` + `.im-warning` + light-theme variants (M5-5 / M5-6 / M5-7 / M5-8)
+- Inline colour spans inside Z and R/T chips: `.im-z-mat` (orange) / `.im-z-water` (cyan) / `.im-rt-r` (red) / `.im-rt-t` (green) (M5-8)
 
-### Hotfix included
+### New globals
 
-- `__VERSION_DELTA__.ruleCodes` aligned with CLAUDE.md spec names: `'A22'` was the v71 ruleCode but every comment tag used `A2.2` (the §222 spec name). The rule-audit regex `\bA22\b\s*[·—]` missed all of them → smoke FAIL → red banner at viewport bottom. Fixed by changing the ruleCode to `'A2.2'` and updating the smoke-assertion expected string. Same approach folded into v72 (ruleCodes line up with CLAUDE.md §227-230 names verbatim).
+- `immersionSubMode` ('tank' / 'wheel' / 'bubbler' / 'squirter')
+- `immersionWaterPathMm` (5–50, default 35)
+- `IMMERSION_THICKNESS_MM` (100, frozen by convention)
+- `IMMERSION_DEFECT_DEPTH_MM` (50, single SDH reference)
+- `IMMERSION_DEFECT_RX` (0.50, centre of plate)
+- `C_WATER_M_S` (1480, Vault impedance table)
+- `IMMERSION_DENSITY_BY_C` (steel 7.85 / aluminium 2.70 / copper 8.96 / cast iron 7.20)
+- `IMMERSION_SUBMODE_META` (label / wpHint / industry tag per sub-mode)
+
+### New localStorage / sessionStorage keys
+
+- None. Immersion state is session-only (slider + sub-mode reset on page reload).
+
+### Keyboard shortcuts
+
+- `6` → `setExercise('immersion')` added to the existing 1–4 EX shortcuts. `5` and `0` still control freq (precedence preserved).
 
 ### Touched files
 
-- `今日工作區/ut-scanner-v71.html` → moved to `歷史版本與日報庫/各版本/ut-scanner-v71.html`
-- `今日工作區/ut-scanner-v72.html` — NEW (v71 base + L1/L3/U2/U3 + hotfix)
-- `今日工作區/CLAUDE.md` — appended §227–§230
-- `今日工作區/AI優化與改善建議書.md` — rewritten to v71 baseline (Lane L/P/N/K/D/U × 3 = 18 big-upgrade candidates) before user picked v72 ship list
-- `ut-scanner-github/ut-scanner-v71.html` → removed; replaced with `ut-scanner-v72.html`
-- `ut-scanner-github/CLAUDE.md` — synced
-- `ut-scanner-github/CHANGELOG.md` — this entry
+- `今日工作區/ut-scanner-v74.html` (renamed from v73; 5 features + 3 user-visible version strings + `__VERSION_DELTA__`)
+- `今日工作區/CLAUDE.md` (§234–§238)
+- `今日工作區/CHANGELOG.md` (this entry)
+- `今日工作區/AI優化與改善建議書.md` (M5-5/6/7/8/9 marked ✅ shipped; schedule rebased so v75 takes M5-1/2/3/4 + remaining six-lens items)
+
+### Notes
+
+- Vault `wiki/ut-immersion.md` was the single physics source — already complete (4 sub-modes / water-path formula / FS echo / impedance / decision tree). No new ingest needed.
+- Boss feedback "Module 5 是浸水式所以呈現的方式要更有邏輯" satisfied by: (1) layered ex-desc walking through the 4 sub-modes one by one tied to industry use-cases, (2) WP slider with live critical-warning visualising the physics inequality, (3) IF gate band annotated on the A-scan, (4) Z/R/T panel that updates live when materialC changes (steel→Al drops R from 88% to ~70%, observable in real time).
+- v75 plan: M5-1 (header PE/PC/TT chip selector) + M5-2 (EX07 PC lab) + M5-3 (PC sensitive zone visualization) + M5-4 (EX08 TT lab). The Module 5 grouping divider added in M5-9 already accommodates the additional buttons.
+- v74 grandfathers v73 SH carry-over smoke (SH1 _findShadowOcclusion / SH2 shallowest / SH3 column-width) so the EX01–EX03 shadow occlusion fix doesn't regress.
 
 ---
 

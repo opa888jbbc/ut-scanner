@@ -830,6 +830,44 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 
 
 
+（以下規則 234\~238 由使用者於 2026-06-01 EDT「OK M5 全採 → 繼續 74 版本」採納後納入。對應建議書 Module 5 區 M5-5/M5-6/M5-7/M5-8/M5-9,Vault `wiki/ut-immersion.md` 為物理來源(impedance / water-path / FS echo / focused probe / 4 sub-modes 矩陣 / 決策樹)。v74 ship 整批 5 條,EX06 = Immersion(EX07 PC + EX08 TT 排 v75)。M5-1/M5-2/M5-3/M5-4 已採納但延後 v75 上線。)
+
+
+
+234\. 【M5-5 · EX06 Immersion 基礎】新增第 6 個 EX,從 contact-PE paradigm 轉到 immersion(probe **懸在水中**不接觸工件,水當耦合介質)。試片同 EX01-03 規格(steel · 100 mm 厚 · MAT_W 寬),增加 4 個必備視覺/物理元素:
+  - **探頭懸空** — 高於 SURF_Y `wpPx = (immersionWaterPathMm / 100) × MAT_H` 像素,中間是水柱可視化
+  - **A-scan 4 peaks**(取代 PE 3-peak): `IP (t=0) → FS (water round-trip 2·WP/c_water) → D (FS + 2·defect_depth/c_steel) → BW (FS + 2·thickness/c_steel)`。各峰物理:IP 是 pulser 觸發、FS 是水/鋼界面 88% 反射(Z 比 46:1.5)、D 是 SDH 回波(透射 12% × 缺陷反射 × 透射 12% 出來)、BW 是底波同 PE
+  - **WP slider 5-50 mm 預設 35 mm**(safely > critical 25 mm @ 100 mm steel)
+  - **IF gate 視覺帶** — A-scan 上 FS+0.5μs 到 BW 之間綠色半透明帶 + 虛線邊界,標「IF gate (in-steel window)」,直觀展示 immersion 實務「gate 出 FS 後的鋼中區段」
+  - **Min-WP overlap warning** — 當 WP < `IMMERSION_THICKNESS_MM × (c_water / (materialC × 1000))` (Vault `WP_min = t × c_water/c_steel`)時,A-scan 內 FS₂ 位置紅 highlight + 控制條紅卡片警告。對 steel/100mm 厚 critical = 25.08 mm
+  - **單 SDH Φ3** @ 50 mm 深 / 中央 X(rx 0.50),學生拖探頭找最大 echo。SDH 直徑同 §43 AN ASTM E2491
+  - drawScan 早返回到 `drawImmersionScene(ctx)`,drawAscan 早返回到 `drawImmersionAscan(ctx, W, H)`,完全不走 PE 的 beam / V-path / shadow 路徑
+
+235\. 【M5-6 · Immersion Wheel sub-mode】EX06 內 sub-toggle 切到 wheel 時,水柱可視化改為**橡膠輪外殼**圓圈包住探頭,輪皮底部接觸 SURF_Y(hybrid 半浸水半接觸,per Vault):
+  - 輪半徑 = `wpPx + TX_H × 0.55 + 8`,中心 y = `SURF_Y - 輪半徑 + 6`(剛好觸 surface)
+  - 輪內水填充 alpha 0.30 青色(模擬輪內充水)
+  - 輪胎黑色 outline + 4 條 spoke 隨 `performance.now()/300` 旋轉(rolling cue 動畫)
+  - 工件上方顯示 「HYBRID · half-immersion + contact tyre」黃色 badge
+  - A-scan 物理相同(共用 drawImmersionAscan),只是 housing geometry 不同 — 對應 Vault wheel probe 教學「same physics, different geometry」
+
+236\. 【M5-7 · Bubbler + Squirter sub-modes】兩個 sub-mode 用同一條 sub-toggle bar 排列,水柱可視化各自不同:
+  - **Bubbler**(低速短水柱):noozle 黑色 housing 在探頭上方,水柱寬度 `TX_W × 1.05`,內含 5 顆 rising bubbles(`performance.now()` 驅動 `y_phase` 從 1 → 0,r 1.4 + sin 抖動,白色 alpha 0.40-0.70);適合 production-line plate/coil 教學
+  - **Squirter**(高壓長水柱):nozzle 黑色 stem 從 canvas 頂端延伸到探頭頂部上方(視覺暗示「source far above」),水柱寬度 `TX_W × 0.75`,linearGradient cyan alpha 0.40-0.50(dense opacity 表示 high pressure);內含 6 條 vertical speed streaks 用 `performance.now()/1000 × 1.8` phase 驅動,impingement 點(水柱碰 surface)畫 12 條 lateral spray fringe(扇形 ±90° + 隨機 alpha 0.30-0.50);適合 aerospace 大件 / 不規則表面教學
+  - 共用 sub-mode 切換 toast(「{mode} mode · {tag} · typical WP {hint}」),每個 mode 的 hint 不同(bubbler 10-25 mm 短,squirter 30-100 mm 長)
+
+237\. 【M5-8 · Acoustic Impedance Z + R/T live panel】immersion-controls 內顯示 2 個 stat chip:
+  - **Z chip**:`Z(mat)=X.X · Z(water)=1.5 MRayl`,Z = ρ × c(g/cm³ × mm/μs = MRayl)。density 用 `IMMERSION_DENSITY_BY_C` lookup(steel 7.85 / aluminium 2.70 / copper 8.96 / cast iron 7.20),跟 §49 AT 的 materialC 連動。Z 數字 + 顏色區分 mat=橘 / water=青
+  - **R/T chip**:`R=XX.X% · T=XX.X%`,intensity reflection R = `((Z_mat-Z_water)/(Z_mat+Z_water))²`,T = 1-R。steel 預設 R≈87.9% / T≈12.1%。R 紅色 / T 綠色
+  - `updateImpedancePanel()` 在 setMaterial 內 hook + 進 EX06 時自動呼叫一次。同時 critical WP 公式跟 materialC 連動(c_steel = materialC × 1000 m/s),`_updateImWpWarning()` 在切材料時順帶觸發
+  - smoke:steel R ≈ 0.879 ± 0.01 / critical WP 100mm/steel ≈ 25.08 mm ± 0.1
+
+238\. 【M5-9 · ex-bar Module 5 grouping divider】ex-bar 在 EX05 跟 EX06 之間插入垂直分隔 label,使 EX06+ 視覺與 Module 1-4 EXs 分離:
+  - DOM:`<span class="ex-group-label" title="...">M5 · TECHNIQUES</span>` 介於 btn-maze 跟 btn-immersion 之間
+  - CSS:`writing-mode:vertical-rl` 直書、padding 0 6px、border 左右兩條 dashed sky-blue、字級 7px、letter-spacing 1.4px、min-height 44px(對齊 ex-btn)、linear-gradient sky-blue 微底色,light theme 各自顏色變體
+  - v74 ship 時 EX06 是 Module 5 唯一 EX。v75 加入 EX07(PC)、EX08(TT)時 group label 自動覆蓋所有 3 個按鈕(因為 ex-bar 是 flex,新按鈕排在 EX06 後 = 都在 label 右側)
+
+
+
 遠端開發生產與「模糊歷史掃描」規範（加拿大時間基準）
 
 
