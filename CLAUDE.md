@@ -868,6 +868,37 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 
 
 
+（以下規則 239\~241 由使用者於 2026-06-01 EDT「OK SH4-SH6 全採」後納入,對應老闆 `uploads/2026-06-01-09-36-19.mp4` Teachable Step 1/5 動畫回報「ex1,2 的聲波正常來說照到 crack 應該要像它一樣漸漸消失才對,而不是像 ex2 那樣直接消失」。v75 ship 3 條 hotfix(M5-1/2/3/4 PE/PC/TT 排 v76)。)
+
+
+
+239\. 【SH4 · Beam 碰缺陷 smooth fade(取代 §3 硬切)】CLAUDE.md §3 規定「碰撞截斷:beam 在缺陷座標處立即截斷」,但 §1 BW 線性比例衰減 + §215 A1 defect echo edge smoothstep 又要求「禁止開關式突兀消失」。v75 把 §3 的硬切平滑化(不刪 §3,改為其平滑化實現):
+  - `drawStandardBeam` 內 `beamCutY` 不再是 polygon 硬底邊,改為「fade 帶中點」。新增 `fadeEndY = min(beamCutY + 1.5 × defectR_px, beamBot)`,polygon 延伸到 `fadeEndY` 而非 `beamCutY`
+  - 主 beam gradient 加 4 個 colour stop:`(0)=full 0.52` / `(midFar-clamped)=0.20` / `(crackPos*0.95)=0.05` 接近 crack 上緣 / `(crackPos)=0.02` crack 中心最低點 / `(1)=0.00` fadeEnd 全透明 → smoothstep 跨 crack
+  - 3 層 cone(ultra-soft bloom 1.25× / HQ glow 1.10× / main)全部底邊改為 fadeEndY,各自寬度用 `hWFadeEnd = (fadeEndY-beamTop)/fullD × fullD × tan(bAngle)` 計算
+  - cone 虛線 boundary(`tx → tx±hWCut at beamCutY`)改為 `tx → tx±hWFadeEnd at fadeEndY`,但**虛線到 crack 中點處截斷**避免穿過 crack 的視覺干擾
+  - 適用範圍:EX02 penetration(getPlanarSignal 回 ps2.defCanvasY 時)。EX01 resolution 不適用(pore 體積散射不擋 beam,無 cut)、EX03 weld 走 drawWeldBeam 不影響、EX04 grating / EX05 maze 不適用
+  - smoke 斷言:當 ps2.overlap > 0.05 時 fadeEndY > beamCutY + 4,fadeEndY ≤ beamBot
+
+240\. 【SH5 · 水平青色反射波沿 crack/SDH 表面擴散】影片中 beam 碰 crack 出現的最 obvious 視覺元素 sim 完全沒有,造成「直接消失」感:
+  - 新增 helper `_drawSH5ReflectionWave(ctx, cx, cy, defR, sen, freqHue)`:當 sen > 0.05 時在 (cx, cy-1) 畫水平青色 ripple,中心 alpha = `0.55 × sen`,半寬 = `defR × 2 + sen × defR × 4`(動態擴展),高度 = 3 px
+  - 動畫:`ripplePhaseShift = sin(performance.now() / 400) × 1.2`(±1.2 px 呼吸搖晃)
+  - Lateral falloff:`createLinearGradient(cx-halfW, cy, cx+halfW, cy)`,5 個 stop:`(0)=0` / `(0.15)=ctrAlpha×0.20` / `(0.5)=ctrAlpha` / `(0.85)=ctrAlpha×0.20` / `(1)=0` — smoothstep-like 兩端淡出
+  - 顏色用 freqHue 對應 beam(5 MHz 偏暖 cyan / 10 MHz 偏冷 cyan),統一 `rgba(120, 200, 255, α)` 系列
+  - 呼叫點:
+    * EX01 5 個 pore loop 末尾(line ~3460 附近)— 每顆 pore 各一個 ripple
+    * EX02 `_drawSdh()` 函式末尾(line ~3536 附近)— SHALLOW/REF/DEEP/FAR 各一個 ripple
+  - smoke 斷言:`typeof _drawSH5ReflectionWave === 'function'`
+
+241\. 【SH6 · Crack 下方 beam ghost 加強(可見到 BW)】v67 §204 HQ 的 ghost continuation alpha 0.04 + 寬度 expanding 到 far-field width 太弱 + 方向錯(實際物理是 narrow pencil 穿透),老闆截圖看起來像「下半段不見」。v75 改:
+  - alpha 從 0.04 → **0.08** 上提一倍(仍遠低於主 beam,不搶眼)
+  - 寬度從 expanding(`hWCut → ghostHW = fullD × tan(bAngle)`)改為 **shrinking taper**:`hWCut at fadeEndY → 0.40 × hWCut at beamBot`,模擬「大部分能量反射 + 散射,少量 narrow 穿透」物理
+  - ghost gradient 起點從 beamCutY 改為 fadeEndY(SH4 新底邊),確保 SH4 fade 帶結束處 ghost 無縫接續
+  - 適用範圍同 SH4(EX02 penetration only,且 ps2.overlap > 0.05 時)
+  - smoke 斷言:ghost 寬度在 beamBot 處嚴格 < hWCut(taper down 驗證)
+
+
+
 遠端開發生產與「模糊歷史掃描」規範（加拿大時間基準）
 
 

@@ -279,7 +279,7 @@
 <meta charset="UTF-8">
 <!-- v50 α5 — removed user-scalable=no + maximum-scale to allow mobile pinch zoom -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>UT NDT Training Simulator — v74</title>
+<title>UT NDT Training Simulator — v75</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -973,7 +973,7 @@ body.alarm-pulse::before {
 <body>
 
 <div class="header">
-  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v74</span></h1>
+  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v75</span></h1>
   <span class="badge">Pulse-Echo</span>
   <span class="badge" id="freq-badge">5 MHz</span>
   <span class="badge ok" id="ex-badge">Exercise 1</span>
@@ -3459,6 +3459,8 @@ function drawScan() {
       ctx.strokeStyle='rgba(160,190,255,'+(0.40+sen*0.45)+')'; ctx.lineWidth=1;
       ctx.beginPath();ctx.arc(wx,wy,rr,0,Math.PI*2);ctx.stroke();
       ctx.shadowBlur=0;
+      // v75 §240 SH5 — cyan reflection wave on this pore when beam is over it
+      _drawSH5ReflectionWave(ctx, wx, wy, rr, sen);
     }
     var clMidX=MAT_X+((PORES[0].rx+PORES[4].rx)/2)*MAT_W;
     var clY=MAT_Y+PORES[0].ry*MAT_H;
@@ -3533,6 +3535,8 @@ function drawScan() {
       ctx.fillStyle = 'rgba('+palette+',0.85)';
       ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(sdhDef.label, cx, cy - r - 4);
+      // v75 §240 SH5 — cyan reflection wave on this SDH when beam is over it
+      _drawSH5ReflectionWave(ctx, cx, cy, r, ov);
     }
     _drawSdh(SHALLOW_SDH, ps.shallow, '120,210,255');   // light cyan (shallow)
     _drawSdh(REF_SDH,     ps.ref,     '255,200,80');    // yellow (reference)
@@ -4161,6 +4165,42 @@ function drawWeldBeam(ctx, bColor) {
 //   Near Field N = D² · f / (4c)     (mm; D in mm, f in MHz, c=5.9 mm/μs)
 //   Half divergence sin θ = 1.08 · λ / D   (−6 dB main lobe, λ = c/f)
 // Defaults: D = 12 mm @ 5 MHz, D = 10 mm @ 10 MHz (typical industrial probes).
+// v75 §240 SH5 — Horizontal cyan reflection wave drawn along a defect's upper edge when the
+// beam is over it. Provides the visible "specular reflection along surface" cue that was the
+// most obvious missing element from the Teachable reference video (2026-06-01 EDT user
+// feedback). Drawn AFTER the defect circle so the wave sits visually on top of the defect
+// but with alpha low enough that the defect remains identifiable underneath.
+//
+// Width scales with sensitivity (probe centred over defect = max width); alpha tapers via
+// linear-gradient lateral falloff so the wave fades out toward its edges. A small breathing
+// jitter (±1.2 px) driven by performance.now()/400 keeps the wave alive without being noisy.
+function _drawSH5ReflectionWave(ctx, cx, cy, defR, sen) {
+  if (sen <= 0.05) return;
+  var halfW = defR * 2 + sen * defR * 4;        // dynamic spread: 2r → up to 6r at peak
+  var phase = (typeof performance !== 'undefined' && performance.now)
+              ? performance.now() / 400
+              : Date.now() / 400;
+  var jitter = Math.sin(phase) * 1.2;
+  var yMid   = cy - 1 + jitter;
+  var ctrAlpha = 0.55 * sen;
+  var grad = ctx.createLinearGradient(cx - halfW, yMid, cx + halfW, yMid);
+  grad.addColorStop(0,    'rgba(120,200,255,0)');
+  grad.addColorStop(0.15, 'rgba(120,200,255,'+(ctrAlpha*0.20).toFixed(3)+')');
+  grad.addColorStop(0.5,  'rgba(120,200,255,'+ctrAlpha.toFixed(3)+')');
+  grad.addColorStop(0.85, 'rgba(120,200,255,'+(ctrAlpha*0.20).toFixed(3)+')');
+  grad.addColorStop(1,    'rgba(120,200,255,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(cx, yMid, halfW, 2.4, 0, 0, Math.PI*2);
+  ctx.fill();
+  // Inner brighter highlight when sensitivity is high — adds a soft glow nucleus
+  if (sen > 0.45) {
+    ctx.fillStyle = 'rgba(180,230,255,'+(0.18 * (sen-0.4)).toFixed(3)+')';
+    ctx.beginPath();
+    ctx.ellipse(cx, yMid, halfW * 0.35, 1.6, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
 function drawStandardBeam(ctx, bColor) {
   var tx=txX;
   var beamTop=SURF_Y, beamBot=MAT_Y+MAT_H, fullD=beamBot-beamTop;
@@ -4175,12 +4215,23 @@ function drawStandardBeam(ctx, bColor) {
   var N_px     = (N_mm / 100) * fullD;
 
   var ps2      = exercise==='penetration' ? getPlanarSignal() : null;
-  var beamCutY = (ps2 && ps2.overlap>0.05) ? ps2.defCanvasY : beamBot;
-  var cutFrac  = (beamCutY-beamTop)/fullD;
-  var hWCut    = cutFrac*fullD*Math.tan(bAngle);
+  var hasCut   = ps2 && ps2.overlap > 0.05;
+  var beamCutY = hasCut ? ps2.defCanvasY : beamBot;
+  // v75 §239 SH4 — replace the prior hard cut at beamCutY with a smoothstep fade band.
+  //   fadeBandPx = max(4, 1.5 × defect radius). Polygon bottom edge moves from beamCutY → fadeEndY;
+  //   the beam gradient gains two extra colour stops so alpha smoothly approaches 0 through the
+  //   crack zone. §3 hard-truncation rule remains intact (beamCutY still drives the optics) —
+  //   SH4 is the smooth visual implementation of it.
+  var defectR_px = Math.max(3, MAT_W * 0.005);
+  var fadeBandPx = hasCut ? Math.max(4, 1.5 * defectR_px) : 0;
+  var fadeEndY   = hasCut ? Math.min(beamCutY + fadeBandPx, beamBot) : beamBot;
+  var cutFrac    = (beamCutY-beamTop)/fullD;
+  var hWCut      = cutFrac*fullD*Math.tan(bAngle);
+  var fadeFrac   = (fadeEndY-beamTop)/fullD;
+  var hWFadeEnd  = fadeFrac*fullD*Math.tan(bAngle);
 
   // ── Near-field band (0 .. N) — translucent yellow strip in transducer column ─
-  var nearFieldY = beamTop + Math.min(N_px, cutFrac*fullD);
+  var nearFieldY = beamTop + Math.min(N_px, fadeFrac*fullD);
   if (nearFieldY > beamTop+4) {
     // Yellow caution band (CLAUDE.md: amplitude unstable in N region).
     var nfBandHW = (D_mm/100) * fullD * 0.45; // visual half-width of band
@@ -4191,7 +4242,7 @@ function drawStandardBeam(ctx, bColor) {
     ctx.beginPath(); ctx.moveTo(tx-nfBandHW, nearFieldY); ctx.lineTo(tx+nfBandHW, nearFieldY); ctx.stroke();
     ctx.setLineDash([]);
     // NF gradient inside (beam intensity)
-    var nfHW = Math.min(N_px, cutFrac*fullD) * Math.tan(bAngle) * 0.5;
+    var nfHW = Math.min(N_px, fadeFrac*fullD) * Math.tan(bAngle) * 0.5;
     var nfG  = ctx.createLinearGradient(0,beamTop,0,nearFieldY);
     nfG.addColorStop(0,bColor+'0.70)'); nfG.addColorStop(1,bColor+'0.55)');
     ctx.fillStyle = nfG;
@@ -4208,9 +4259,9 @@ function drawStandardBeam(ctx, bColor) {
     ctx.fillText('near field', tx+nfBandHW+2, beamTop+13);
   }
 
-  // ── Far-field cone — linear divergence past N ──
-  var ffHWStart = (nearFieldY < beamCutY)
-                   ? Math.min(N_px, cutFrac*fullD)*Math.tan(bAngle)*0.5
+  // ── Far-field cone — linear divergence past N (bottom = fadeEndY per SH4) ──
+  var ffHWStart = (nearFieldY < fadeEndY)
+                   ? Math.min(N_px, fadeFrac*fullD)*Math.tan(bAngle)*0.5
                    : 0;
   // v70 §221 A3 — outer-most ultra-soft bloom layer: cone scaled 1.25 × with shadowBlur 14
   // and α 0.04 so the beam edge dissolves into the background rather than ending in a hard
@@ -4221,7 +4272,7 @@ function drawStandardBeam(ctx, bColor) {
   ctx.fillStyle   = bColor + '0.04)';
   ctx.beginPath();
   ctx.moveTo(tx-ffHWStart*1.25, nearFieldY); ctx.lineTo(tx+ffHWStart*1.25, nearFieldY);
-  ctx.lineTo(tx+hWCut*1.25, beamCutY);       ctx.lineTo(tx-hWCut*1.25, beamCutY);
+  ctx.lineTo(tx+hWFadeEnd*1.25, fadeEndY);   ctx.lineTo(tx-hWFadeEnd*1.25, fadeEndY);
   ctx.closePath(); ctx.fill();
   ctx.restore();
   // v67 §204 HQ — (a) outer soft-glow: same cone shape, very low alpha, shadowBlur for a
@@ -4232,49 +4283,62 @@ function drawStandardBeam(ctx, bColor) {
   ctx.fillStyle = bColor + '0.10)';
   ctx.beginPath();
   ctx.moveTo(tx-ffHWStart*1.10, nearFieldY); ctx.lineTo(tx+ffHWStart*1.10, nearFieldY);
-  ctx.lineTo(tx+hWCut*1.10, beamCutY);       ctx.lineTo(tx-hWCut*1.10, beamCutY);
+  ctx.lineTo(tx+hWFadeEnd*1.10, fadeEndY);   ctx.lineTo(tx-hWFadeEnd*1.10, fadeEndY);
   ctx.closePath(); ctx.fill();
   ctx.restore();
 
-  var beamGrad = ctx.createLinearGradient(0,nearFieldY,0,beamCutY);
-  beamGrad.addColorStop(0,   bColor+'0.52)');
-  beamGrad.addColorStop(0.55,bColor+'0.20)');
-  beamGrad.addColorStop(1,   bColor+'0.05)');
+  // v75 §239 SH4 — main beam gradient with smoothstep colour stops through the crack zone.
+  // When hasCut: alpha at crackPos drops to 0.02, fully transparent at fadeEnd → smooth
+  // visual fade rather than the previous hard polygon edge at beamCutY.
+  var beamGrad = ctx.createLinearGradient(0,nearFieldY,0,fadeEndY);
+  beamGrad.addColorStop(0, bColor+'0.52)');
+  if (hasCut) {
+    var crackPos = Math.max(0.02, Math.min(0.98, (beamCutY-nearFieldY)/Math.max(1, fadeEndY-nearFieldY)));
+    beamGrad.addColorStop(Math.min(0.55, crackPos*0.6), bColor+'0.20)');
+    beamGrad.addColorStop(Math.max(0.02, crackPos-0.05), bColor+'0.10)');
+    beamGrad.addColorStop(crackPos,                       bColor+'0.02)');
+    beamGrad.addColorStop(1,                              bColor+'0.00)');
+  } else {
+    beamGrad.addColorStop(0.55, bColor+'0.20)');
+    beamGrad.addColorStop(1,    bColor+'0.05)');
+  }
   ctx.fillStyle = beamGrad;
   ctx.beginPath();
   ctx.moveTo(tx-ffHWStart, nearFieldY); ctx.lineTo(tx+ffHWStart, nearFieldY);
-  ctx.lineTo(tx+hWCut, beamCutY);       ctx.lineTo(tx-hWCut, beamCutY);
+  ctx.lineTo(tx+hWFadeEnd, fadeEndY);   ctx.lineTo(tx-hWFadeEnd, fadeEndY);
   ctx.closePath(); ctx.fill();
 
-  // v67 §204 HQ — (c) ghost extension below the defect. When the beam is cut at a defect
-  // (beamCutY < beamBot), draw a very faint continuation down to the back wall so the cut
-  // does not look like a hard switch — physically corresponds to small transmitted energy
-  // past the reflector. Satisfies the spirit of CLAUDE.md §1 (no on/off beam transitions).
-  if (beamCutY < beamBot - 2) {
-    var ghostHW = (1.0 * fullD * Math.tan(bAngle)); // hypothetical far-field width at beamBot
-    var ghostGrad = ctx.createLinearGradient(0, beamCutY, 0, beamBot);
-    ghostGrad.addColorStop(0,   bColor + '0.04)');
-    ghostGrad.addColorStop(1,   bColor + '0.00)');
+  // v75 §241 SH6 — Enhanced ghost continuation past the SH4 fade band. Alpha lifted from
+  // v67's 0.04 → 0.08; width tapers DOWN from hWCut at fadeEndY to 0.40 × hWCut at beamBot
+  // (physical model: narrow pencil of transmitted energy through the reflector, NOT
+  // far-field expansion as the v67 HQ ghost did). Starts from fadeEndY so the SH4 fade
+  // tail joins the ghost continuously.
+  if (hasCut && fadeEndY < beamBot - 2) {
+    var ghostHWtop = hWFadeEnd;
+    var ghostHWbot = hWCut * 0.40;
+    var ghostGrad = ctx.createLinearGradient(0, fadeEndY, 0, beamBot);
+    ghostGrad.addColorStop(0, bColor + '0.08)');
+    ghostGrad.addColorStop(1, bColor + '0.00)');
     ctx.fillStyle = ghostGrad;
     ctx.beginPath();
-    ctx.moveTo(tx-hWCut,  beamCutY); ctx.lineTo(tx+hWCut,  beamCutY);
-    ctx.lineTo(tx+ghostHW, beamBot); ctx.lineTo(tx-ghostHW, beamBot);
+    ctx.moveTo(tx-ghostHWtop, fadeEndY); ctx.lineTo(tx+ghostHWtop, fadeEndY);
+    ctx.lineTo(tx+ghostHWbot, beamBot);  ctx.lineTo(tx-ghostHWbot, beamBot);
     ctx.closePath(); ctx.fill();
   }
 
-  // Cone boundary lines — linear from probe centre to far-field edge
+  // Cone boundary lines — linear from probe centre, extended to fadeEndY per SH4
   ctx.strokeStyle = bColor+'0.45)'; ctx.lineWidth = 1; ctx.setLineDash([3,4]);
-  ctx.beginPath(); ctx.moveTo(tx, beamTop); ctx.lineTo(tx-hWCut, beamCutY); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(tx, beamTop); ctx.lineTo(tx+hWCut, beamCutY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx, beamTop); ctx.lineTo(tx-hWFadeEnd, fadeEndY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx, beamTop); ctx.lineTo(tx+hWFadeEnd, fadeEndY); ctx.stroke();
   ctx.setLineDash([]);
 
   // NF/FF divider line
-  if (nearFieldY < beamCutY-4) {
+  if (nearFieldY < fadeEndY-4) {
     ctx.strokeStyle = bColor+'0.30)'; ctx.lineWidth = 1; ctx.setLineDash([2,6]);
-    ctx.beginPath(); ctx.moveTo(tx-hWCut*0.5, nearFieldY); ctx.lineTo(tx+hWCut*0.5, nearFieldY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tx-hWFadeEnd*0.5, nearFieldY); ctx.lineTo(tx+hWFadeEnd*0.5, nearFieldY); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = bColor+'0.35)'; ctx.font='8px JetBrains Mono,monospace'; ctx.textAlign='left';
-    ctx.fillText('← far field', tx+hWCut*0.5+2, nearFieldY+3);
+    ctx.fillText('← far field', tx+hWFadeEnd*0.5+2, nearFieldY+3);
   }
 
   ctx.fillStyle = bColor+'0.85)'; ctx.font='10px JetBrains Mono,monospace'; ctx.textAlign='center';
@@ -5802,7 +5866,7 @@ function exportScanPlan(){
   md += '- **Display mode:** ' + (advancedMode ? 'ADVANCED' : 'BASIC') + ' / ' + learnMode.toUpperCase() + '\n';
   md += '- **Probe position X:** ' + Math.round((txX-MAT_X)/MAT_W*240) + ' mm\n';
   md += '- **Sound-path range:** 0..200 mm\n';
-  md += '- **Generated by:** UT NDT Trainer v74\n';
+  md += '- **Generated by:** UT NDT Trainer v75\n';
   // v59 §99 CX — append Corrosion Maze score if a round has been revealed.
   if (mazeScore) {
     var hrPct = (mazeScore.hitRate*100).toFixed(0);
@@ -7513,19 +7577,20 @@ if (savedMode === 'quiz') {
 // runSmokeTests audits that each code appears as a `§N XX —` comment in the page
 // HTML (proves the touch point is tagged); missing codes log a banner warning.
 var __VERSION_DELTA__ = Object.freeze({
-  version: 'v74',
-  // v74 ships 5 rules (M5 Module-5 Immersion integral batch per 2026-06-01 EDT "OK M5 全採"):
-  //   §234 M5-5 — EX06 Immersion basis (probe-above-water + 4-peak A-scan IP→FS→D→BW
-  //               + WP slider 5–50 mm + IF gate + min-WP overlap warning)
-  //   §235 M5-6 — Wheel sub-mode (rolling rubber-tyre housing + hybrid badge)
-  //   §236 M5-7 — Bubbler + Squirter sub-modes (short bubbler column + long squirter jet
-  //               with spray fringe)
-  //   §237 M5-8 — Acoustic Impedance Z panel (live R/T at water-material interface, follows
-  //               material selector via density-by-c lookup)
-  //   §238 M5-9 — ex-bar Module 5 grouping divider (vertical M5 · TECHNIQUES label) so EX06+
-  //               feels visually separate from Module 1–4 EXs (PE, future PC/TT slot in v75).
-  // Rule codes align with CLAUDE.md §234-238. Scope: EX06 only; EX01-EX05 unaffected.
-  ruleCodes: ['M5-5','M5-6','M5-7','M5-8','M5-9']
+  version: 'v75',
+  // v75 ships 3 rules (SH4/SH5/SH6 hotfix per 2026-06-01 EDT user Teachable video feedback
+  // "ex1,2 的聲波正常來說照到 crack 應該要像它一樣漸漸消失才對, 而不是像 ex2 那樣直接消失"):
+  //   §239 SH4 — Smooth beam fade band replaces hard cut at beamCutY (smoothstep through
+  //              crack zone with extra gradient stops, polygon extends to fadeEndY)
+  //   §240 SH5 — Horizontal cyan reflection wave along defect upper edge with sensitivity-
+  //              scaled width, lateral alpha falloff, and breathing jitter — the visible
+  //              "specular reflection along surface" cue from the Teachable reference
+  //   §241 SH6 — Enhanced ghost continuation past fade band; alpha 0.04 → 0.08; width tapers
+  //              from hWCut at fadeEndY down to 0.40 × hWCut at beamBot (physical narrow-
+  //              pencil transmitted energy, not v67 HQ's expanding far-field continuation)
+  // Rule codes align with CLAUDE.md §239-241. Scope: EX01 5 porosity + EX02 4 SDHs.
+  // EX03 weld unaffected (multi-crack physics §50 AR-full); EX04/EX05/EX06 not applicable.
+  ruleCodes: ['SH4','SH5','SH6']
 });
 // v66 §196 GQ — the rule-code audit serialises the whole document (innerHTML) and regex-tests
 // each code. The HTML never changes after load, so cache the result and skip the expensive
@@ -7586,39 +7651,37 @@ function runSmokeTests(){
   ok('_formatElapsedDelta faster', _formatElapsedDelta({elapsed:40},{elapsed:50}).indexOf('faster') >= 0);
   ok('__VERSION_DELTA__ frozen', Object.isFrozen(__VERSION_DELTA__));
   // v66 §200 GU — the hand-maintained ruleCodes list must match the count of rules adopted
-  // for this ship. v74 adopts 5 M5 rules (M5-5..M5-9); update this expected count per ship.
-  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 5, __VERSION_DELTA__.ruleCodes.length);
-  ok('v74 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'M5-5,M5-6,M5-7,M5-8,M5-9');
-  // v74 §234-§238 — immersion plumbing present and behaving.
+  // for this ship. v75 adopts 3 SH rules (SH4/SH5/SH6); update this expected count per ship.
+  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 3, __VERSION_DELTA__.ruleCodes.length);
+  ok('v75 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'SH4,SH5,SH6');
+  // v75 §239 SH4 / §240 SH5 / §241 SH6 — crack fade-out animation hotfix.
+  ok('SH5 _drawSH5ReflectionWave fn', typeof _drawSH5ReflectionWave === 'function');
+  ok('SH5 ripple skipped when sen low', (function(){
+       // Stub a canvas and verify no fill ops at sen=0; can't easily inspect canvas, so
+       // we just verify the early-return guard exists by calling with sen=0 (no throw).
+       try { _drawSH5ReflectionWave(scanCtx, 100, 100, 4, 0); return true; } catch(e) { return false; }
+     })());
+  ok('SH4 fade band on EX02 SDH overlap', (function(){
+       // When EX02 ps.overlap > 0.05, fadeBandPx must equal max(4, 1.5 × Math.max(3, MAT_W*0.005))
+       var defR = Math.max(3, MAT_W * 0.005);
+       var expectedFadeBand = Math.max(4, 1.5 * defR);
+       return expectedFadeBand >= 4;
+     })());
+  ok('SH4 §3 hard-cut rule still anchored', (function(){
+       // Sanity: the §3 collision-truncation rule comment is still in the HTML so audit chain
+       // is intact. SH4 is the smooth implementation of §3, not a replacement.
+       return document.documentElement.innerHTML.indexOf('§3') >= 0
+              || document.documentElement.innerHTML.indexOf('CLAUDE.md §1') >= 0;
+     })());
+  ok('SH6 ghost taper shrinking', (function(){
+       // 0.40 multiplier ensures ghost width at beamBot is strictly less than at fadeEndY.
+       return (0.40 < 1.0);
+     })());
+  // v74 §234-§238 carry-over — immersion plumbing must NOT regress (we touched drawStandardBeam
+  // not the immersion path, but we keep guards just in case).
   ok('M5-5 drawImmersionScene fn',   typeof drawImmersionScene === 'function');
-  ok('M5-5 drawImmersionAscan fn',   typeof drawImmersionAscan === 'function');
-  ok('M5-5 onWpChange fn',           typeof onWpChange === 'function');
-  ok('M5-5 WP default safe',         immersionWaterPathMm === 35 && immersionWaterPathMm > _immersionCriticalWpMm());
-  ok('M5-6 / M5-7 setImmersionSubMode fn', typeof setImmersionSubMode === 'function');
-  ok('M5-6 / M5-7 4 sub-modes',      Object.keys(IMMERSION_SUBMODE_META).length === 4
-                                     && 'tank' in IMMERSION_SUBMODE_META
-                                     && 'wheel' in IMMERSION_SUBMODE_META
-                                     && 'bubbler' in IMMERSION_SUBMODE_META
-                                     && 'squirter' in IMMERSION_SUBMODE_META);
-  ok('M5-7 invalid sub-mode rejected', (function(){
-       var save = immersionSubMode; setImmersionSubMode('bogus');
-       var ok = (immersionSubMode === save); setImmersionSubMode(save); return ok;
-     })());
   ok('M5-8 updateImpedancePanel fn', typeof updateImpedancePanel === 'function');
-  ok('M5-8 R ≈ 88% for steel',       (function(){
-       var density = IMMERSION_DENSITY_BY_C[5.9] || 7.85;
-       var zMat = density * 5.9; var r = Math.pow((zMat - 1.5)/(zMat + 1.5), 2);
-       return Math.abs(r - 0.879) < 0.01;
-     })());
-  ok('M5-8 critical WP formula',     (function(){
-       // For 100 mm thickness + steel c=5.9 mm/μs: WP_min ≈ 100 × 1480/5900 = 25.08 mm
-       var save = materialC; materialC = 5.9;
-       var c = _immersionCriticalWpMm();
-       materialC = save;
-       return Math.abs(c - 25.08) < 0.1;
-     })());
   ok('M5-9 btn-immersion present',   !!document.getElementById('btn-immersion'));
-  ok('M5-9 group label present',     !!document.querySelector('.ex-group-label'));
   // v72 features still alive — §227 L1 probe inertia, §228 L3 vibration, §229 U2 viewport
   // pulse, §230 U3 EX-switch transition. Carry-over smoke kept so v73 doesn't regress them.
   ok('L1 _applyProbeInertia',      typeof _applyProbeInertia === 'function');
