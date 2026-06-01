@@ -894,8 +894,22 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
   - alpha 從 0.04 → **0.08** 上提一倍(仍遠低於主 beam,不搶眼)
   - 寬度從 expanding(`hWCut → ghostHW = fullD × tan(bAngle)`)改為 **shrinking taper**:`hWCut at fadeEndY → 0.40 × hWCut at beamBot`,模擬「大部分能量反射 + 散射,少量 narrow 穿透」物理
   - ghost gradient 起點從 beamCutY 改為 fadeEndY(SH4 新底邊),確保 SH4 fade 帶結束處 ghost 無縫接續
-  - 適用範圍同 SH4(EX02 penetration only,且 ps2.overlap > 0.05 時)
+  - **適用範圍(v76 §242 SH7 後更新):EX01 porosity cluster + EX02 SDH 都套**(v75 原寫 only EX02 是 scope 錯,已修正)
   - smoke 斷言:ghost 寬度在 beamBot 處嚴格 < hWCut(taper down 驗證)
+
+
+
+（以下規則 242 由使用者於 2026-06-02 EDT「先把我說的陰影的部分處理好其他的先不動」採納後納入,對應老闆 `uploads/螢幕擷取畫面 2026-06-02 023101.png` 紫色標註截圖。v75 §239 SH4 / §241 SH6 把 EX01 排除是 scope 錯,v76 修正擴展。)
+
+
+
+242\. 【SH7 · EX01 porosity cluster shadow(SH4/SH6 scope 擴展到 EX01)】v75 §239 SH4 / §241 SH6 註記寫「EX01 resolution 不適用(pore 體積散射不擋 beam,無 cut)」是 scope 判斷錯。老闆 2026-06-02 EDT 截圖紫色標註明示 EX01 porosity cluster 也要擋 beam,beam 穿透到 BW 是 bug:
+  - `drawStandardBeam` 內 `hasCut` 偵測新增 EX01 分支:`else if (exercise === 'resolution' && PORES.length > 0)`,遍歷 PORES 找 sen > 0.10 的最強 pore(`sen = max(0, 1 - |txX - poreX| / beamHW)`,beamHW 同 EX01 pore drawing loop:freq=5 → MAT_W×0.16,freq=10 → MAT_W×0.05)
+  - 若找到 hit pore:`hasCut = true` / `beamCutY = clusterY_best`(該 pore 的 Y) / `defectR_px = poreRadius_local`(pore 半徑 4-7 px,而非 SDH 的 3 px)
+  - 其餘 SH4 fade band + SH6 ghost taper 邏輯沿用 v75 已 ship 版本不動 → EX01 自動套到「漸進淡出 + ghost narrow 穿透到 BW」
+  - **§3 碰撞截斷規則沒變**,只是把適用範圍從 planar reflector(SDH/crack)擴大到 volumetric scatterer(pore cluster) — 物理上 pore 確實 attenuate beam(scattering loss),v75 之前完全沒模擬
+  - 適用範圍:EX01 5 顆 pore + EX02 4 個 SDH 全套。EX03 weld 不動 / EX04/EX05/EX06 不適用
+  - smoke 斷言:EX01 模擬 txX = pore center 時 hasCut 偵測正確 + beamCutY === pore.y
 
 
 
