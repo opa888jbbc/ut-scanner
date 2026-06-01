@@ -10,6 +10,48 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ---
 
+## v75 — 2026-06-01 EDT
+
+**Trigger:** user "OK SH4-SH6 全採" adopting all 3 hotfix entries from the proposal book. Source: `uploads/2026-06-01-09-36-19.mp4` (Teachable Step 1/5 walkthrough). User comparison: "ex1,2 的聲波正常來說照到 crack 應該要像它一樣漸漸消失才對, 而不是像 ex2 那樣直接消失". The video shows three visible elements missing from sim: (a) horizontal cyan reflection wave along crack surface, (b) smooth beam fade rather than hard cut, (c) beam continuing past crack to back wall. v75 patches all three in `drawStandardBeam` + EX01/EX02 defect loops.
+
+### New rules (CLAUDE.md §239–§241)
+
+| §   | Code  | Theme                                  | One-liner |
+|-----|-------|----------------------------------------|-----------|
+| 239 | SH4   | Smooth beam fade (replaces hard cut)   | Polygon bottom moves beamCutY → fadeEndY = beamCutY + max(4, 1.5 × defectR); gradient adds smoothstep stops through crack zone |
+| 240 | SH5   | Cyan reflection wave on defect surface | `_drawSH5ReflectionWave` helper; ellipse along defect upper edge; width 2r→6r with sensitivity; lateral alpha falloff; breathing jitter |
+| 241 | SH6   | Enhanced ghost continuation            | Alpha 0.04 → 0.08; width tapers DOWN hWCut → 0.40 × hWCut at beamBot (narrow pencil, not v67 HQ expansion) |
+
+### Modified functions
+
+- `drawStandardBeam` (SH4 + SH6) — replaced hard cut at beamCutY with smoothstep fade band; new vars `hasCut` / `defectR_px` / `fadeBandPx` / `fadeEndY` / `hWFadeEnd`; all 3 cone layers (ultra-soft bloom 1.25× / HQ glow 1.10× / main gradient) now end at fadeEndY; main gradient gains 4 smoothstep colour stops through crack zone; ghost continuation rewritten with shrinking taper
+- `drawScan` EX01 pore loop (SH5) — calls `_drawSH5ReflectionWave(ctx, wx, wy, rr, sen)` after each pore circle drawn
+- `drawScan` EX02 `_drawSdh` helper (SH5) — calls `_drawSH5ReflectionWave(ctx, cx, cy, r, ov)` at the end of each SDH render
+
+### New functions
+
+- `_drawSH5ReflectionWave(ctx, cx, cy, defR, sen)` — Standalone helper drawing horizontal cyan reflection ripple. Returns early when sen ≤ 0.05. Uses 5-stop linear gradient (0 → ctrAlpha*0.20 → ctrAlpha → ctrAlpha*0.20 → 0), `performance.now()/400` breathing phase. Inner brighter highlight at sen > 0.45.
+
+### Smoke tests
+
+- Replaced v74's 12 immersion-specific asserts with 8 carry-over + v75 hotfix asserts: `ruleCodes.length === 3` / `ruleCodes === 'SH4,SH5,SH6'` / `_drawSH5ReflectionWave` typeof / sen=0 no-throw guard / SH4 fade band ≥ 4 px / §3 anchor still in HTML / SH6 taper < 1.0 / carry-over: drawImmersionScene + updateImpedancePanel + btn-immersion still present.
+
+### Touched files
+
+- `今日工作區/ut-scanner-v75.html` (renamed from v74; SH4+SH5+SH6 patches + 3 user-visible version strings + `__VERSION_DELTA__`)
+- `今日工作區/CLAUDE.md` (§239–§241)
+- `今日工作區/CHANGELOG.md` (this entry)
+- `今日工作區/AI優化與改善建議書.md` (SH4-SH6 marked ✅ shipped; v75 hotfix row inserted before v76 = M5-1/2/3/4)
+
+### Notes
+
+- §3 carbon-rule "碰撞截斷機制" stays in CLAUDE.md unchanged — SH4 is its smooth visual implementation, NOT a replacement. The `beamCutY` variable still drives the optical truncation point; SH4 just extends the polygon and gradient to fade out around it instead of slicing.
+- EX01 (porosity) does NOT get SH4 / SH6 because pores are volumetric scatterers in CLAUDE.md (don't trigger beam-cut path). EX01 only receives SH5 (cyan ripple per pore) which gives the missing "interaction visual" without changing beam shape.
+- EX03 weld is on the drawWeldBeam path with its own multi-crack physics (§50 AR-full / §74 BR / §85 CJ corner-trap + tip-diffraction). Not touched in v75 to avoid coupling SH4/SH5/SH6 with the weld-specific beam topology.
+- EX06 immersion bypasses drawStandardBeam entirely (drawImmersionScene early-return) so SH4-SH6 do not affect Module 5.
+
+---
+
 ## v74 — 2026-06-01 EDT
 
 **Trigger:** user "OK M5 全採 → 繼續 74 版本" adopting all 9 Module-5 entries from the proposal book. Boss separately stipulated "Module 5 是浸水式所以呈現的方式要更有邏輯 — 知識庫內找資料". v74 ships the immersion-coherent batch (5 of the 9 M5 entries: M5-5, M5-6, M5-7, M5-8, M5-9); v75 will ship the remaining 4 (M5-1 PE/PC/TT selector, M5-2 EX07 PC, M5-3 PC sensitive zone, M5-4 EX08 TT). Physics source = Vault `wiki/ut-immersion.md` (4 sub-modes matrix, water-path formula `WP_min = t × c_water / c_steel`, FS echo 88 % reflection, focused probe trade-offs).
