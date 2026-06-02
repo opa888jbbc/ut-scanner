@@ -4323,7 +4323,9 @@ function drawStandardBeam(ctx, bColor) {
   var N_px     = (N_mm / 100) * fullD;
 
   // v77 §243 SH9-a — Incident Wave Preservation. Cone is ALWAYS full from probe to BW.
-  // SH4/SH6/SH7 fadeEndY / hWFadeEnd / ghost taper / EX01-pore-driven hasCut all reverted.
+  // SH4/SH6/SH7 fade-end / half-width-fade / ghost taper / EX01-pore-driven hasCut all reverted.
+  // (Deliberately reworded — the SH9-a smoke guard string-matches this function's source, so the
+  //  deprecated variable names must not appear here even inside a comment.)
   // Only detect interactionY (depth of strongest defect contact) for the SH9-e gradient split.
   // No shape modification of the cone.
   var ps2 = exercise==='penetration' ? getPlanarSignal() : null;
@@ -4459,32 +4461,41 @@ function drawStandardBeam(ctx, bColor) {
   ctx.closePath(); ctx.fill();
 
   // v78 §252-§255 XS-1 — Gradient acoustic shadow (B 方案 並存模式 with SH9 reflection).
-  // Per §246 SH9-d updated: alpha cap raised from 0.025 to 0.30~0.50 via createLinearGradient.
-  // Per §253 XS-1-b: start alpha 0.42 static / 0.50 dragging, mid 0.18 / 0.22, end 0.00.
-  // Per §254 XS-1-c: linear gradient along beam axis (vertical for direct contact),
-  //   polygon half-width = defR × 2 + 6 px (slightly wider than defect to avoid hard edges).
-  // Per §255 XS-1-d: alpha scales with defAmp — shadow strength mirrors A-scan BW reduction
-  //   (BW already linearly attenuated by bwBlockFactor in getPlanarSignal / getLineDefSignal).
-  // SH9-a cone shape stays 100% unchanged — this is an OVERLAY layer, not a cone modification.
-  if (hasInteraction && interactionAmp > 0.05) {
-    var _shadowTop = interactionY + interactionR;          // start just below defect lower edge
-    var _shadowBot = beamBot - 5;                          // stop just before BW line
-    if (_shadowBot > _shadowTop + 4) {
-      var _gradHW   = interactionR * 2 + 6;                // §253 polygon half-width
+  // 2026-06-03 EDT hotfix #3 (boss directive): make the occlusion GRADUAL, not an abrupt
+  // full-width slab. Two changes vs hotfix#2:
+  //   (1) strength = smoothstep ramp of the echo amp — NO hard floor — so the shadow fades
+  //       in/out smoothly as the probe slides over the sphere (kills the "whole trapezoid pops
+  //       in at full strength the instant overlap crosses a threshold" abruptness).
+  //   (2) feathered top — transparent right at the sphere, darkest just BEHIND it, fading to 0
+  //       at the BW — so the yellow looks "gradually eaten" by the blue sphere, not slabbed.
+  // Still covers the FULL cone width below the sphere (hotfix#2) so no side "穿透".
+  // §253 top alpha 0.40 static / 0.46 dragging · §254 vertical gradient along beam axis ·
+  // §255 alpha couples to defAmp (mirrors A-scan BW reduction). SH9-a cone shape unchanged.
+  if (hasInteraction && interactionAmp > 0.02) {
+    // Smoothstep strength (0..1) — gradual fade-in/out tied to echo amp, NO floor.
+    var _ss       = Math.max(0, Math.min(1, (interactionAmp - 0.02) / 0.28));
+    var _strength = _ss * _ss * (3 - 2 * _ss);
+    var _shadowTop = interactionY - interactionR;          // sphere's upper contact edge
+    var _shadowBot = beamBot - 2;                          // fade fully out just before the BW
+    if (_strength > 0.01 && _shadowBot > _shadowTop + 4) {
       var _isDrag   = (typeof dragging !== 'undefined' && dragging);
-      var _ampScale = Math.min(1, interactionAmp / 0.35);  // §254 strength scaling
-      var _topAlpha = (_isDrag ? 0.50 : 0.42) * _ampScale;
-      var _midAlpha = (_isDrag ? 0.22 : 0.18) * _ampScale;
+      var _maxAlpha = (_isDrag ? 0.46 : 0.40) * _strength; // peak darkness just behind the sphere
+      // Beam-cone half-width at depth y (probe tip → ±hWBot at beamBot) — full-width coverage.
+      var _coneHWAt = function(y){ return hWBot * (y - beamTop) / fullD; };
+      var _hwTop    = _coneHWAt(_shadowTop);
+      var _hwBot    = _coneHWAt(_shadowBot);
+      // Vertical gradient, FEATHERED: 0 at the sphere → peak just behind → 0 at the BW (no slab).
       var _shadGrad = ctx.createLinearGradient(interactionX, _shadowTop, interactionX, _shadowBot);
-      _shadGrad.addColorStop(0,   'rgba(20,30,50,' + _topAlpha.toFixed(3) + ')');
-      _shadGrad.addColorStop(0.5, 'rgba(20,30,50,' + _midAlpha.toFixed(3) + ')');
-      _shadGrad.addColorStop(1,   'rgba(20,30,50,0)');
+      _shadGrad.addColorStop(0.00, 'rgba(20,30,50,0)');                                   // at sphere — yellow still shows
+      _shadGrad.addColorStop(0.20, 'rgba(20,30,50,' + _maxAlpha.toFixed(3) + ')');         // darkest just behind sphere
+      _shadGrad.addColorStop(0.60, 'rgba(20,30,50,' + (_maxAlpha * 0.45).toFixed(3) + ')');
+      _shadGrad.addColorStop(1.00, 'rgba(20,30,50,0)');                                   // gone by the back wall
       ctx.fillStyle = _shadGrad;
       ctx.beginPath();
-      ctx.moveTo(interactionX - _gradHW, _shadowTop);
-      ctx.lineTo(interactionX + _gradHW, _shadowTop);
-      ctx.lineTo(interactionX + _gradHW, _shadowBot);
-      ctx.lineTo(interactionX - _gradHW, _shadowBot);
+      ctx.moveTo(tx - _hwTop, _shadowTop);                 // trapezoid follows the cone boundary
+      ctx.lineTo(tx + _hwTop, _shadowTop);
+      ctx.lineTo(tx + _hwBot, _shadowBot);
+      ctx.lineTo(tx - _hwBot, _shadowBot);
       ctx.closePath();
       ctx.fill();
     }
@@ -7848,9 +7859,12 @@ function runSmokeTests(){
   // v78 §253 XS-1-b — SH9-d alpha cap raised. drawStandardBeam now uses createLinearGradient
   // for the shadow layer (replacing the old 0.025 dim spot).
   ok('XS-1-b createLinearGradient in beam', drawStandardBeam.toString().indexOf('createLinearGradient(interactionX') >= 0);
-  ok('XS-1-b alpha cap in range (0.42 static / 0.50 dragging)', (function(){
+  // 2026-06-03 EDT hotfix #2 — top alpha revised to 0.40 static / 0.46 dragging and the shadow
+  // now follows the full cone width (boss directive: kill the side penetration). Assertion
+  // matches the new gradient cap.
+  ok('XS-1-b alpha cap in range (0.40 static / 0.46 dragging)', (function(){
        var src = drawStandardBeam.toString();
-       return src.indexOf('0.42') >= 0 && src.indexOf('0.50') >= 0;
+       return src.indexOf('0.40') >= 0 && src.indexOf('0.46') >= 0;
      })());
   // v78 §252 XS-1-a — SH9-a cone shape still preserved (cone polygon still goes to beamBot,
   // gradient shadow is an OVERLAY layer not a cone modification).
