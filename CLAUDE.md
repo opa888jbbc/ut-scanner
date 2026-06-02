@@ -872,7 +872,7 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 
 
 
-239\. 【SH4 · Beam 碰缺陷 smooth fade(取代 §3 硬切)】CLAUDE.md §3 規定「碰撞截斷:beam 在缺陷座標處立即截斷」,但 §1 BW 線性比例衰減 + §215 A1 defect echo edge smoothstep 又要求「禁止開關式突兀消失」。v75 把 §3 的硬切平滑化(不刪 §3,改為其平滑化實現):
+239\. 【SH4 · DEPRECATED v77 §243 SH9-a】(原意:Beam 碰缺陷 smooth fade(取代 §3 硬切)) — v77 paradigm 翻轉,sim 不再做「beam blockage」陰影視覺,改做「energy redistribution」反射視覺。本條保留 audit trail 不刪,但 drawStandardBeam 的 fadeEndY/hWFadeEnd/smoothstep gradient 全撤回。原條文如下:CLAUDE.md §3 規定「碰撞截斷:beam 在缺陷座標處立即截斷」,但 §1 BW 線性比例衰減 + §215 A1 defect echo edge smoothstep 又要求「禁止開關式突兀消失」。v75 把 §3 的硬切平滑化(不刪 §3,改為其平滑化實現):
   - `drawStandardBeam` 內 `beamCutY` 不再是 polygon 硬底邊,改為「fade 帶中點」。新增 `fadeEndY = min(beamCutY + 1.5 × defectR_px, beamBot)`,polygon 延伸到 `fadeEndY` 而非 `beamCutY`
   - 主 beam gradient 加 4 個 colour stop:`(0)=full 0.52` / `(midFar-clamped)=0.20` / `(crackPos*0.95)=0.05` 接近 crack 上緣 / `(crackPos)=0.02` crack 中心最低點 / `(1)=0.00` fadeEnd 全透明 → smoothstep 跨 crack
   - 3 層 cone(ultra-soft bloom 1.25× / HQ glow 1.10× / main)全部底邊改為 fadeEndY,各自寬度用 `hWFadeEnd = (fadeEndY-beamTop)/fullD × fullD × tan(bAngle)` 計算
@@ -890,7 +890,7 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
     * EX02 `_drawSdh()` 函式末尾(line ~3536 附近)— SHALLOW/REF/DEEP/FAR 各一個 ripple
   - smoke 斷言:`typeof _drawSH5ReflectionWave === 'function'`
 
-241\. 【SH6 · Crack 下方 beam ghost 加強(可見到 BW)】v67 §204 HQ 的 ghost continuation alpha 0.04 + 寬度 expanding 到 far-field width 太弱 + 方向錯(實際物理是 narrow pencil 穿透),老闆截圖看起來像「下半段不見」。v75 改:
+241\. 【SH6 · DEPRECATED v77 §243 SH9-a + §247 SH9-e】(原意:Crack 下方 beam ghost 加強(可見到 BW))— v77 ghost continuation polygon 全撤回。改為 SH9-e 的「下方 polygon × 0.85 opacity」,形狀完全不變。本條保留 audit trail 不刪。原條文如下:v67 §204 HQ 的 ghost continuation alpha 0.04 + 寬度 expanding 到 far-field width 太弱 + 方向錯(實際物理是 narrow pencil 穿透),老闆截圖看起來像「下半段不見」。v75 改:
   - alpha 從 0.04 → **0.08** 上提一倍(仍遠低於主 beam,不搶眼)
   - 寬度從 expanding(`hWCut → ghostHW = fullD × tan(bAngle)`)改為 **shrinking taper**:`hWCut at fadeEndY → 0.40 × hWCut at beamBot`,模擬「大部分能量反射 + 散射,少量 narrow 穿透」物理
   - ghost gradient 起點從 beamCutY 改為 fadeEndY(SH4 新底邊),確保 SH4 fade 帶結束處 ghost 無縫接續
@@ -910,6 +910,69 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
   - **§3 碰撞截斷規則沒變**,只是把適用範圍從 planar reflector(SDH/crack)擴大到 volumetric scatterer(pore cluster) — 物理上 pore 確實 attenuate beam(scattering loss),v75 之前完全沒模擬
   - 適用範圍:EX01 5 顆 pore + EX02 4 個 SDH 全套。EX03 weld 不動 / EX04/EX05/EX06 不適用
   - smoke 斷言:EX01 模擬 txX = pore center 時 hasCut 偵測正確 + beamCutY === pore.y
+  - **DEPRECATED v77 §243 SH9-a**:陰影視覺 paradigm 全部換掉,beam 形狀回到「永遠完整 cone 到 BW」,SH7 的 hasCut 偵測撤回。本條保留作 audit trail。
+
+
+
+（以下規則 243\~251 由使用者於 2026-06-02 EDT「OK SH9 全採」採納後納入,對應老闆「SH9 Physics Correction Directive (UT Energy Redistribution Model)」9 段指令。**Paradigm 翻轉**:從「beam blockage model」改為「ultrasonic energy redistribution model」,beam 不再是光線、defect 不再是擋光物。新建 Vault note `wiki/acoustic-shadow-bea.md` 雖然物理對但 paradigm 方向錯,被 §243~§251 取代。**§239 SH4 / §241 SH6 / §242 SH7 標 DEPRECATED v77**,保留 audit trail 不刪。)
+
+
+
+243\. 【SH9-a · Incident Wave Preservation】撤銷 SH4/SH6/SH7 所有形狀改造:`drawStandardBeam` 內 `hasCut` 偵測整段移除,`fadeEndY` / `hWFadeEnd` / smoothstep 漸層 / ghost taper polygon 全部撤回,回到 v74 之前的 cone 形狀。Cone **永遠從 probe 走到 BW**,不因 defect 改變幾何:
+  - 不縮、不切、不 taper、不在 defect 後產生陰影、不做 defect-dependent geometry
+  - **關鍵物理**:能量不能在 interaction 發生**之前**就消失。Probe → Defect 段必須維持 100% 視覺強度;只有 Defect → BW 段允許衰減(那是 SH9-e 的事)。v75/v76 的 smoothstep fade band 從 defect 上方就開始衰減,違反因果,必撤
+  - 適用範圍:EX01 5 pore + EX02 4 SDH(都走 `drawStandardBeam`)。EX03 weld 走 `drawWeldBeam` 不動,EX04/EX05/EX06 完全不適用
+
+244\. 【SH9-b · Reflection Becomes Primary Visual Element】反射波是新的主視覺,陰影退役。每個 defect interaction 必須產生**看得見**的反射 ripple 動畫:
+  - 通用 helper `getReflectionPath(defX, defY, probeX, probeY)` 回傳 `{dx, dy, len, ux, uy}`(從 defect 指向 probe 的單位向量) — **絕不 hardcode 「往上」**,為未來 PAUT/sector/0°-45°-60°-70° 預留
+  - SDH/planar 反射動畫 `_drawSH9SpecularReflection(ctx, defX, defY, probeX, probeY, defAmp)`:沿 `getReflectionPath` 方向發 3 個錯開 phase 的 ripple packet,每個 packet `1500 ms / cycle`(`performance.now() % 1500 / 1500` 驅動 0→1 進度),從 defect 走到 probe;packet 形狀 = focused cone(沿反射方向半寬 `2 + defAmp×8` px,長度 `defAmp×10 + 4` px),alpha = `defAmp × (1 − progress) × 0.85`(走越遠越淡);青色 palette(`120, 200, 255` 系列,跟 SH5 一致)
+  - **物理時間 vs 視覺時間 trade-off**(對應 SH9 決策 1 A):聲波實際 ToF 微秒級人眼看不到,故意慢化到 1.5s/packet 換教學可視性。物理依據文檔化即可,不必算真實 ToF
+  - 多 phased packet(3 個 phase 錯開 500ms)= 連續往回打的波包感
+  - 適用範圍:EX02 4 SDH(SHALLOW / REF / DEEP / FAR 各套),亮度用 `ps.{name}.defAmp` 直接驅動
+
+245\. 【SH9-c · Porosity Scattering Model】Porosity 是 Mie 散射器(per Vault `defect-types-echoes.md`),不是鏡面反射:
+  - `_drawSH9PoreScatter(ctx, poreX, poreY, poreR, poreAmp, poreIdx)`:每顆 pore 發 6-8 條 ripple,角度用 **`poreIdx` 為 seed 的固定 deterministic 隨機**(`Math.sin(poreIdx × 13.37 + k × 2.71) * 0.5 + 0.5` 之類的偽隨機產生器),確保不閃但有亂感
+  - 每條 ripple 用 `performance.now() / 1200 + k × 0.13` 為 phase,半徑 `poreR + progress × 14` px,alpha `poreAmp × (1 − progress) × 0.55`
+  - **絕對不能完美 360° 均勻**(那會看起來像 LED 不像散射) — 6-8 個 random 方向比較像真實 isotropic-with-noise
+  - 適用範圍:EX01 5 顆 pore,亮度用 **per-pore amp**(SH9-i 要求)
+
+246\. 【SH9-d · Minimal Residual Shadow】陰影保留為「教學殘留 cue」但**幾乎看不見**:
+  - 最大 alpha = **0.025**(2.5%),只在 defect 正下方一條極窄 column(半寬 = `defectR × 0.8`)
+  - 不畫 dark cone、不做 hard cut、不做 beam extinction
+  - 教學意圖:讓學生**理論上**知道「下方有些微能量損失」,但**視覺上不擾**反射主角
+  - 適用範圍:EX01 + EX02 同 SH9-a 範圍
+
+247\. 【SH9-e · Transmitted Energy Model】Defect 下方的 beam 持續傳播到 BW,只是 opacity 略減:
+  - `drawStandardBeam` 不再用單一 polygon 整個 cone。改用**兩段 polygon**:上半(beamTop → defectY)alpha = 100%(原 gradient),下半(defectY → beamBot)alpha × **0.85**(全段乘 0.85 表示能量損失)
+  - 沒有 defect interaction 時(無任何 sen > 0.10):整 cone 單 polygon 走原 gradient,跟 v73 之前一模一樣
+  - 多 defect 時:用最強 defect 的 Y 為分界線(`max sen pore.y` for EX01;`max overlap SDH.y` for EX02)
+  - **形狀完全不變** — 跟 SH9-a 互補,a 管「上方完整」,e 管「下方略減」
+  - 適用範圍:EX01 + EX02 同 SH9-a 範圍
+
+248\. 【SH9-f · Backwall Behavior】BW 必須漸進衰減,**禁止** binary on/off:
+  - **§1 BW 線性比例衰減已在規,本條 audit 兼分級**:porosity 弱 / cluster 中 / SDH 強三級
+  - `getPlanarSignal()` 的 `bwAmp` 必須隨 defect overlap 平滑下降(已在);若發現是 binary 立即修
+  - EX01 `getLineDefSignal()` 也要回傳對應的 `bwAmp`(per cluster 衰減),由 SH9-i refactor 順手處理
+  - 視覺對應:scan canvas 上 BW line(`MAT_Y + MAT_H` 附近)的亮度應該跟 `bwAmp / bwAmpMax` 連動
+  - 適用範圍:EX01 + EX02 同 SH9-a 範圍
+
+249\. 【SH9-g · A-Scan Coupling Requirement】**每個視覺 reflection ripple 的強度必須跟 A-scan D peak 同步**:
+  - SH9-b SDH ripple 強度用 `ps.{name}.defAmp`(A-scan 算 D peak 用的同一個值)
+  - SH9-c pore ripple 強度用 `getLineDefSignal().perPoreAmps[i]`(由 SH9-i refactor 提供)
+  - **禁止**用 `sen`(幾何 proximity)、`overlap` 單獨、或任何不在 A-scan path 上的代理值
+  - 視覺亮 ⇔ D peak 高,**永遠同步**
+
+250\. 【SH9-h · Educational Goal】條文宣示性規則,documentation only:
+  - 學生**該**學到:reflection / scattering / energy redistribution / beam propagation / BW interaction
+  - 學生**不該**學到:beam blockage / flashlight physics / shadow-based interpretation
+  - sim 視覺定位:professional UT training simulator,not optical shadow simulator
+  - 本條無 code 改動,但所有後續視覺決策必須對齊此目標
+
+251\. 【SH9-i · Reflection-AScan Amplitude Coupling】反射視覺亮度的 source-of-truth = A-scan 用的同一 amplitude value:
+  - EX02:`ps.shallow/ref/deep/far.defAmp` 已存在,SH9-b 直接套
+  - EX01:`getLineDefSignal()` API 升級 — 內部本來就 loop 5 pore 各算貢獻再加總,改為**同時回傳每顆 pore 的個別 amp**:`return { amp, perPoreAmps:[a0,a1,a2,a3,a4], bwAmp, ... }`。`.amp` 欄位保留向後相容(EX01 A-scan 既有用法不動)
+  - `perPoreAmps[i]` 計算公式 = 該 pore 對 A-scan 總 amp 的貢獻(含 §5 衰減 + §6 取向高斯 + §12 couplant + sen geometric overlap + freq response)
+  - SH9-c ripple 亮度用 `perPoreAmps[i]`,**絕不用 sen 單獨**
 
 
 

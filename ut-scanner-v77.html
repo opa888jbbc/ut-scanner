@@ -279,7 +279,7 @@
 <meta charset="UTF-8">
 <!-- v50 α5 — removed user-scalable=no + maximum-scale to allow mobile pinch zoom -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>UT NDT Training Simulator — v76</title>
+<title>UT NDT Training Simulator — v77</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -973,7 +973,7 @@ body.alarm-pulse::before {
 <body>
 
 <div class="header">
-  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v76</span></h1>
+  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v77</span></h1>
   <span class="badge">Pulse-Echo</span>
   <span class="badge" id="freq-badge">5 MHz</span>
   <span class="badge ok" id="ex-badge">Exercise 1</span>
@@ -2937,22 +2937,30 @@ function beamHalfWidthPx() {
 
 // ── EXERCISE 1: per-pore signals (used for A-scan) ─────
 // Each pore has its own ry (depth) → different time-of-flight → different A-scan X
-function getPoreSignals() {
+// v77 §251 SH9-i — per-pore amplitude logic extracted into _perPoreAmp(i) so the SH9-c
+// scatter-ripple visual can read from the SAME source of truth as the A-scan D peaks
+// (no more sen-as-proxy proximity calculation in the renderer).
+function _perPoreAmp(poreIdx) {
+  if (poreIdx < 0 || poreIdx >= PORES.length) return { amp:0, sen:0, p:null, wx:0 };
   var bHW = beamHalfWidthPx();
-  var out  = [];
+  var p   = PORES[poreIdx];
+  var wx  = MAT_X + p.rx * MAT_W;
+  var dx  = Math.abs(txX - wx);
+  // Gaussian lateral sensitivity: peak at beam centre
+  var sen = dx < bHW ? Math.exp(-(dx*dx)/(2*bHW*bHW*0.18)) : 0;
+  if (sen < 0.01) return { amp:0, sen:sen, p:p, wx:wx };
+  var att = twoWayAtten(p.ry);
+  // 10MHz reflects small pores more efficiently (higher resolution)
+  var freqReflectivity = freq===5 ? 0.9 : 1.1;
+  var amp = Math.min(sen * att * freqReflectivity * gainMult(), 2.5);
+  return { amp:amp, sen:sen, p:p, wx:wx };
+}
+function getPoreSignals() {
+  var out = [];
   for (var i = 0; i < PORES.length; i++) {
-    var p   = PORES[i];
-    var wx  = MAT_X + p.rx * MAT_W;
-    var dx  = Math.abs(txX - wx);
-    // Gaussian lateral sensitivity: peak at beam centre
-    var sen = dx < bHW ? Math.exp(-(dx*dx)/(2*bHW*bHW*0.18)) : 0;
-    if (sen < 0.01) continue;
-    var att = twoWayAtten(p.ry);
-    // 10MHz reflects small pores more efficiently (higher resolution)
-    var freqReflectivity = freq===5 ? 0.9 : 1.1;
-    var amp = Math.min(sen * att * freqReflectivity * gainMult(), 2.5);
-    if (amp < 0.01) continue;
-    out.push({ amp:amp, ry:p.ry, rx:p.rx, wx:wx, sen:sen });
+    var s = _perPoreAmp(i);
+    if (s.amp < 0.01) continue;
+    out.push({ amp:s.amp, ry:s.p.ry, rx:s.p.rx, wx:s.wx, sen:s.sen, poreIdx:i });
   }
   return out;
 }
@@ -3459,8 +3467,12 @@ function drawScan() {
       ctx.strokeStyle='rgba(160,190,255,'+(0.40+sen*0.45)+')'; ctx.lineWidth=1;
       ctx.beginPath();ctx.arc(wx,wy,rr,0,Math.PI*2);ctx.stroke();
       ctx.shadowBlur=0;
-      // v75 §240 SH5 — cyan reflection wave on this pore when beam is over it
+      // v75 §240 SH5 — cyan reflection wave on this pore when beam is over it (surface highlight)
       _drawSH5ReflectionWave(ctx, wx, wy, rr, sen);
+      // v77 §245 SH9-c — Mie scattering animation (primary visual). Intensity from A-scan
+      // amplitude (SH9-i / SH9-g coupling) NOT geometric sen.
+      var _poreSignalForVis = _perPoreAmp(pi);
+      _drawSH9PoreScatter(ctx, wx, wy, rr, _poreSignalForVis.amp, pi);
     }
     var clMidX=MAT_X+((PORES[0].rx+PORES[4].rx)/2)*MAT_W;
     var clY=MAT_Y+PORES[0].ry*MAT_H;
@@ -3535,8 +3547,12 @@ function drawScan() {
       ctx.fillStyle = 'rgba('+palette+',0.85)';
       ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(sdhDef.label, cx, cy - r - 4);
-      // v75 §240 SH5 — cyan reflection wave on this SDH when beam is over it
+      // v75 §240 SH5 — cyan reflection wave on this SDH (surface highlight, kept per decision 2)
       _drawSH5ReflectionWave(ctx, cx, cy, r, ov);
+      // v77 §244 SH9-b — Directional specular reflection animation from defect → probe.
+      // Primary visual cue (SH9-h). defAmp drives intensity (SH9-i / SH9-g coupling) — same
+      // value the A-scan D peak uses, so visual energy ⇔ A-scan amplitude always sync.
+      _drawSH9SpecularReflection(ctx, cx, cy, txX, SURF_Y, sdhSig.defAmp);
     }
     _drawSdh(SHALLOW_SDH, ps.shallow, '120,210,255');   // light cyan (shallow)
     _drawSdh(REF_SDH,     ps.ref,     '255,200,80');    // yellow (reference)
@@ -4174,6 +4190,98 @@ function drawWeldBeam(ctx, bColor) {
 // Width scales with sensitivity (probe centred over defect = max width); alpha tapers via
 // linear-gradient lateral falloff so the wave fades out toward its edges. A small breathing
 // jitter (±1.2 px) driven by performance.now()/400 keeps the wave alive without being noisy.
+// v77 §244 SH9-b — Generic reflection path helper. Returns the unit vector and length
+// from the defect to the probe so the specular reflection animation works for any beam
+// angle (0° / 45° / 60° / 70° / PAUT / sector). NEVER hardcode "upward" — use this.
+function getReflectionPath(defX, defY, probeX, probeY) {
+  var dx  = probeX - defX;
+  var dy  = probeY - defY;
+  var len = Math.sqrt(dx*dx + dy*dy);
+  if (len < 0.001) return { dx:0, dy:-1, len:1, ux:0, uy:-1 };
+  return { dx:dx, dy:dy, len:len, ux:dx/len, uy:dy/len };
+}
+
+// v77 §244 SH9-b — Directional specular reflection animation for planar reflectors (SDH).
+// Three phased ripple packets travel from the defect surface toward the probe along the
+// reflection path. Each packet is a focused cone (narrow angular spread) — the dominant
+// visual cue, NOT the shadow. Intensity is driven by defAmp (the same value the A-scan
+// uses for the D peak — SH9-i / SH9-g coupling).
+function _drawSH9SpecularReflection(ctx, defX, defY, probeX, probeY, defAmp) {
+  if (defAmp <= 0.02) return;  // no visible reflection below this threshold
+  var path = getReflectionPath(defX, defY, probeX, probeY);
+  // Perpendicular unit vector (rotate 90° for cone half-width direction)
+  var perpX = -path.uy;
+  var perpY =  path.ux;
+  // Packet duration 1.5 s per cycle; 3 packets staggered 500 ms each
+  var now = (typeof performance !== 'undefined' && performance.now)
+            ? performance.now() : Date.now();
+  var cycleMs = 1500;
+  var packetCount = 3;
+  for (var k = 0; k < packetCount; k++) {
+    var phase = ((now + k * (cycleMs / packetCount)) % cycleMs) / cycleMs;  // 0..1
+    var progress = phase;                                                    // 0 at defect → 1 at probe
+    var travel   = progress * path.len;
+    var cx = defX + path.ux * travel;
+    var cy = defY + path.uy * travel;
+    var halfLen   = 4 + defAmp * 10;             // along reflection axis
+    var halfWidth = 2 + defAmp * 6;              // perpendicular to axis (focused cone)
+    var alpha     = defAmp * (1 - progress) * 0.85;
+    // Build a small filled trapezoid centred on (cx, cy), oriented along (ux,uy)
+    var p1x = cx + path.ux * halfLen + perpX * halfWidth;
+    var p1y = cy + path.uy * halfLen + perpY * halfWidth;
+    var p2x = cx + path.ux * halfLen - perpX * halfWidth;
+    var p2y = cy + path.uy * halfLen - perpY * halfWidth;
+    var p3x = cx - path.ux * halfLen - perpX * halfWidth * 0.4;
+    var p3y = cy - path.uy * halfLen - perpY * halfWidth * 0.4;
+    var p4x = cx - path.ux * halfLen + perpX * halfWidth * 0.4;
+    var p4y = cy - path.uy * halfLen + perpY * halfWidth * 0.4;
+    ctx.fillStyle = 'rgba(120,200,255,' + alpha.toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.moveTo(p1x, p1y); ctx.lineTo(p2x, p2y);
+    ctx.lineTo(p3x, p3y); ctx.lineTo(p4x, p4y);
+    ctx.closePath(); ctx.fill();
+  }
+}
+
+// v77 §245 SH9-c — Pore (Mie) scattering animation. Each pore emits 6-8 ripple packets at
+// pseudo-random angles (deterministic by poreIdx seed so it does NOT flicker frame-to-frame).
+// Angular distribution is intentionally non-uniform — porosity is isotropic-with-noise, not
+// a perfect 360° emitter. Intensity from perPoreAmp (same source as A-scan).
+function _drawSH9PoreScatter(ctx, poreX, poreY, poreR, poreAmp, poreIdx) {
+  if (poreAmp <= 0.02) return;
+  var rayCount = 7;                              // odd count avoids visual symmetry
+  var now = (typeof performance !== 'undefined' && performance.now)
+            ? performance.now() : Date.now();
+  // Deterministic pseudo-random angles seeded by pore index (stable across frames)
+  function _seedRand(k) {
+    return ((Math.sin(poreIdx * 13.37 + k * 2.71) * 43758.5453) % 1 + 1) % 1;
+  }
+  for (var k = 0; k < rayCount; k++) {
+    // Base angle evenly spaced, perturbed by deterministic noise — non-uniform but stable
+    var baseAng = (k / rayCount) * Math.PI * 2;
+    var jitter  = (_seedRand(k) - 0.5) * 0.6;    // ±0.3 rad jitter per ray
+    var ang     = baseAng + jitter;
+    // Each ray has its own phase offset so they don't all pulse together
+    var phaseOffset = _seedRand(k + 100) * 1200;
+    var cycleMs = 1200;
+    var phase = ((now + phaseOffset) % cycleMs) / cycleMs;
+    var radius = poreR + phase * 14;             // expand outward
+    var alpha  = poreAmp * (1 - phase) * 0.55;
+    if (alpha < 0.01) continue;
+    var rx = poreX + Math.cos(ang) * radius;
+    var ry = poreY + Math.sin(ang) * radius;
+    // Small ripple blob (oriented elongated along radial direction)
+    ctx.save();
+    ctx.translate(rx, ry);
+    ctx.rotate(ang);
+    ctx.fillStyle = 'rgba(120,200,255,' + alpha.toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 3 + poreAmp * 2, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 function _drawSH5ReflectionWave(ctx, cx, cy, defR, sen) {
   if (sen <= 0.05) return;
   var halfW = defR * 2 + sen * defR * 4;        // dynamic spread: 2r → up to 6r at peak
@@ -4214,50 +4322,37 @@ function drawStandardBeam(ctx, bColor) {
   // Convert near-field mm to canvas px using MAT_H = 100 mm thickness.
   var N_px     = (N_mm / 100) * fullD;
 
-  // v75 §239 SH4 / §241 SH6 — smoothstep fade band + narrow-pencil ghost continuation.
-  // v76 §242 SH7 — scope extended from EX02-only to EX01 porosity cluster too. Pore acts as
-  // volumetric scatterer that DOES attenuate beam (scattering loss) — v75's "EX01 不適用"
-  // was a scope error per 2026-06-02 EDT user screenshot annotation showing purple shadow
-  // below the cluster.
-  var ps2      = exercise==='penetration' ? getPlanarSignal() : null;
-  var hasCut   = false;
-  var beamCutY = beamBot;
-  var defectR_px = Math.max(3, MAT_W * 0.005);   // SDH baseline (overridden for EX01)
-  if (ps2 && ps2.overlap > 0.05) {
-    hasCut   = true;
-    beamCutY = ps2.defCanvasY;
-    // defectR_px stays at SDH ~3 px
+  // v77 §243 SH9-a — Incident Wave Preservation. Cone is ALWAYS full from probe to BW.
+  // SH4/SH6/SH7 fadeEndY / hWFadeEnd / ghost taper / EX01-pore-driven hasCut all reverted.
+  // Only detect interactionY (depth of strongest defect contact) for the SH9-e gradient split.
+  // No shape modification of the cone.
+  var ps2 = exercise==='penetration' ? getPlanarSignal() : null;
+  var hasInteraction = false;
+  var interactionY   = beamBot;
+  if (ps2) {
+    // EX02 — find strongest SDH overlap (defAmp is per-defect; pick max).
+    var sdhKeys = ['shallow','ref','deep','far'];
+    var bestOverlap = 0;
+    for (var _sk=0; _sk<sdhKeys.length; _sk++) {
+      var _e = ps2[sdhKeys[_sk]];
+      if (_e && _e.overlap > bestOverlap) { bestOverlap = _e.overlap; interactionY = _e.defCanvasY; }
+    }
+    if (bestOverlap > 0.05) hasInteraction = true;
   } else if (exercise === 'resolution' && typeof PORES !== 'undefined' && PORES.length > 0) {
-    // v76 §242 SH7 — detect strongest in-beam pore. Beam half-width follows the EX01 pore
-    // drawing loop's freq-dependent constant (matches the sensitivity model used for the
-    // defect rendering itself, so visual + shadow read together).
-    var poreR_local   = Math.max(4, Math.min(7, MAT_W * 0.013));
-    var beamHW_local  = freq===5 ? MAT_W*0.16 : MAT_W*0.05;
-    var maxSenPore    = 0;
-    var clusterY_best = 0;
+    // EX01 — SH9-i: use amplitude-coupled _perPoreAmp, not geometric sen-proxy.
+    var bestAmp = 0;
     for (var _pi=0; _pi<PORES.length; _pi++) {
-      var _p   = PORES[_pi];
-      var _pX  = MAT_X + _p.rx * MAT_W;
-      var _pY  = MAT_Y + _p.ry * MAT_H;
-      var _pdx = Math.abs(txX - _pX);
-      var _sen = Math.max(0, 1 - _pdx/beamHW_local);
-      if (_sen > maxSenPore) { maxSenPore = _sen; clusterY_best = _pY; }
+      var _s = _perPoreAmp(_pi);
+      if (_s.amp > bestAmp) { bestAmp = _s.amp; interactionY = MAT_Y + _s.p.ry * MAT_H; }
     }
-    if (maxSenPore > 0.10) {
-      hasCut     = true;
-      beamCutY   = clusterY_best;
-      defectR_px = poreR_local;       // larger fade band for pore vs SDH (4-7 vs 3 px)
-    }
+    if (bestAmp > 0.05) hasInteraction = true;
   }
-  var fadeBandPx = hasCut ? Math.max(4, 1.5 * defectR_px) : 0;
-  var fadeEndY   = hasCut ? Math.min(beamCutY + fadeBandPx, beamBot) : beamBot;
-  var cutFrac    = (beamCutY-beamTop)/fullD;
-  var hWCut      = cutFrac*fullD*Math.tan(bAngle);
-  var fadeFrac   = (fadeEndY-beamTop)/fullD;
-  var hWFadeEnd  = fadeFrac*fullD*Math.tan(bAngle);
+  // Cone geometry — UNCHANGED from v74: full half-width at beamBot, full far-field cone.
+  var cutFrac = 1.0;
+  var hWBot   = fullD * Math.tan(bAngle);
 
   // ── Near-field band (0 .. N) — translucent yellow strip in transducer column ─
-  var nearFieldY = beamTop + Math.min(N_px, fadeFrac*fullD);
+  var nearFieldY = beamTop + Math.min(N_px, fullD);
   if (nearFieldY > beamTop+4) {
     // Yellow caution band (CLAUDE.md: amplitude unstable in N region).
     var nfBandHW = (D_mm/100) * fullD * 0.45; // visual half-width of band
@@ -4268,7 +4363,7 @@ function drawStandardBeam(ctx, bColor) {
     ctx.beginPath(); ctx.moveTo(tx-nfBandHW, nearFieldY); ctx.lineTo(tx+nfBandHW, nearFieldY); ctx.stroke();
     ctx.setLineDash([]);
     // NF gradient inside (beam intensity)
-    var nfHW = Math.min(N_px, fadeFrac*fullD) * Math.tan(bAngle) * 0.5;
+    var nfHW = Math.min(N_px, fullD) * Math.tan(bAngle) * 0.5;
     var nfG  = ctx.createLinearGradient(0,beamTop,0,nearFieldY);
     nfG.addColorStop(0,bColor+'0.70)'); nfG.addColorStop(1,bColor+'0.55)');
     ctx.fillStyle = nfG;
@@ -4285,86 +4380,87 @@ function drawStandardBeam(ctx, bColor) {
     ctx.fillText('near field', tx+nfBandHW+2, beamTop+13);
   }
 
-  // ── Far-field cone — linear divergence past N (bottom = fadeEndY per SH4) ──
-  var ffHWStart = (nearFieldY < fadeEndY)
-                   ? Math.min(N_px, fadeFrac*fullD)*Math.tan(bAngle)*0.5
+  // ── Far-field cone — linear divergence past N, all 3 layers terminate at beamBot ──
+  var ffHWStart = (nearFieldY < beamBot)
+                   ? Math.min(N_px, fullD)*Math.tan(bAngle)*0.5
                    : 0;
-  // v70 §221 A3 — outer-most ultra-soft bloom layer: cone scaled 1.25 × with shadowBlur 14
-  // and α 0.04 so the beam edge dissolves into the background rather than ending in a hard
-  // polygon line. Stacks under the existing HQ glow + main gradient (3-layer feathered edge).
+  // v70 §221 A3 — outer-most ultra-soft bloom layer (1.25×, blur 14, α 0.04).
   ctx.save();
   ctx.shadowColor = bColor + '0.30)';
   ctx.shadowBlur  = 14;
   ctx.fillStyle   = bColor + '0.04)';
   ctx.beginPath();
   ctx.moveTo(tx-ffHWStart*1.25, nearFieldY); ctx.lineTo(tx+ffHWStart*1.25, nearFieldY);
-  ctx.lineTo(tx+hWFadeEnd*1.25, fadeEndY);   ctx.lineTo(tx-hWFadeEnd*1.25, fadeEndY);
+  ctx.lineTo(tx+hWBot*1.25, beamBot);        ctx.lineTo(tx-hWBot*1.25, beamBot);
   ctx.closePath(); ctx.fill();
   ctx.restore();
-  // v67 §204 HQ — (a) outer soft-glow: same cone shape, very low alpha, shadowBlur for a
-  // gentle haze that makes the beam read like light, not a polygon. Drawn UNDER the cone.
+  // v67 §204 HQ — outer soft-glow (1.10×, blur 7, α 0.10).
   ctx.save();
   ctx.shadowColor = bColor + '0.45)';
   ctx.shadowBlur = 7;
   ctx.fillStyle = bColor + '0.10)';
   ctx.beginPath();
   ctx.moveTo(tx-ffHWStart*1.10, nearFieldY); ctx.lineTo(tx+ffHWStart*1.10, nearFieldY);
-  ctx.lineTo(tx+hWFadeEnd*1.10, fadeEndY);   ctx.lineTo(tx-hWFadeEnd*1.10, fadeEndY);
+  ctx.lineTo(tx+hWBot*1.10, beamBot);        ctx.lineTo(tx-hWBot*1.10, beamBot);
   ctx.closePath(); ctx.fill();
   ctx.restore();
 
-  // v75 §239 SH4 — main beam gradient with smoothstep colour stops through the crack zone.
-  // When hasCut: alpha at crackPos drops to 0.02, fully transparent at fadeEnd → smooth
-  // visual fade rather than the previous hard polygon edge at beamCutY.
-  var beamGrad = ctx.createLinearGradient(0,nearFieldY,0,fadeEndY);
-  beamGrad.addColorStop(0, bColor+'0.52)');
-  if (hasCut) {
-    var crackPos = Math.max(0.02, Math.min(0.98, (beamCutY-nearFieldY)/Math.max(1, fadeEndY-nearFieldY)));
-    beamGrad.addColorStop(Math.min(0.55, crackPos*0.6), bColor+'0.20)');
-    beamGrad.addColorStop(Math.max(0.02, crackPos-0.05), bColor+'0.10)');
-    beamGrad.addColorStop(crackPos,                       bColor+'0.02)');
-    beamGrad.addColorStop(1,                              bColor+'0.00)');
+  // v77 §247 SH9-e — Transmitted Energy Model. The cone polygon stays full size to beamBot;
+  // only the gradient gets an extra colour-stop pair at interactionY. Above interactionY:
+  // gradient is v74-identical (0.52 → 0.20 at 0.55 → 0.05 at 1.0). Below interactionY:
+  // alpha is multiplied by 0.85 — represents the transmitted energy past the reflector.
+  // Smoothly distributed, no horizontal seam, no shape change.
+  var beamGrad = ctx.createLinearGradient(0, nearFieldY, 0, beamBot);
+  function _v74AlphaAt(t) {
+    if (t <= 0)    return 0.52;
+    if (t < 0.55)  return 0.52 + (0.20 - 0.52) * (t / 0.55);
+    if (t < 1)     return 0.20 + (0.05 - 0.20) * ((t - 0.55) / 0.45);
+    return 0.05;
+  }
+  if (hasInteraction) {
+    var iPos = (interactionY - nearFieldY) / Math.max(1, beamBot - nearFieldY);
+    iPos = Math.max(0.001, Math.min(0.999, iPos));
+    var alphaI = _v74AlphaAt(iPos);
+    beamGrad.addColorStop(0, bColor + '0.52)');
+    if (iPos > 0.55) beamGrad.addColorStop(0.55, bColor + '0.20)');
+    beamGrad.addColorStop(iPos, bColor + alphaI.toFixed(3) + ')');                       // last full-intensity stop
+    beamGrad.addColorStop(Math.min(0.9999, iPos + 0.0005), bColor + (alphaI * 0.85).toFixed(3) + ')');  // 0.85× below
+    if (iPos < 0.55) beamGrad.addColorStop(0.55, bColor + (0.20 * 0.85).toFixed(3) + ')');
+    beamGrad.addColorStop(1, bColor + (0.05 * 0.85).toFixed(3) + ')');
   } else {
-    beamGrad.addColorStop(0.55, bColor+'0.20)');
-    beamGrad.addColorStop(1,    bColor+'0.05)');
+    beamGrad.addColorStop(0,    bColor + '0.52)');
+    beamGrad.addColorStop(0.55, bColor + '0.20)');
+    beamGrad.addColorStop(1,    bColor + '0.05)');
   }
   ctx.fillStyle = beamGrad;
   ctx.beginPath();
   ctx.moveTo(tx-ffHWStart, nearFieldY); ctx.lineTo(tx+ffHWStart, nearFieldY);
-  ctx.lineTo(tx+hWFadeEnd, fadeEndY);   ctx.lineTo(tx-hWFadeEnd, fadeEndY);
+  ctx.lineTo(tx+hWBot, beamBot);        ctx.lineTo(tx-hWBot, beamBot);
   ctx.closePath(); ctx.fill();
 
-  // v75 §241 SH6 — Enhanced ghost continuation past the SH4 fade band. Alpha lifted from
-  // v67's 0.04 → 0.08; width tapers DOWN from hWCut at fadeEndY to 0.40 × hWCut at beamBot
-  // (physical model: narrow pencil of transmitted energy through the reflector, NOT
-  // far-field expansion as the v67 HQ ghost did). Starts from fadeEndY so the SH4 fade
-  // tail joins the ghost continuously.
-  if (hasCut && fadeEndY < beamBot - 2) {
-    var ghostHWtop = hWFadeEnd;
-    var ghostHWbot = hWCut * 0.40;
-    var ghostGrad = ctx.createLinearGradient(0, fadeEndY, 0, beamBot);
-    ghostGrad.addColorStop(0, bColor + '0.08)');
-    ghostGrad.addColorStop(1, bColor + '0.00)');
-    ctx.fillStyle = ghostGrad;
-    ctx.beginPath();
-    ctx.moveTo(tx-ghostHWtop, fadeEndY); ctx.lineTo(tx+ghostHWtop, fadeEndY);
-    ctx.lineTo(tx+ghostHWbot, beamBot);  ctx.lineTo(tx-ghostHWbot, beamBot);
-    ctx.closePath(); ctx.fill();
+  // v77 §246 SH9-d — Minimal residual shadow. A tiny dim spot at the BW line directly
+  // under the strongest defect's X projection. Max alpha 0.025 (= 2.5% dimming). Purely
+  // pedagogical cue; should be barely noticeable.
+  if (hasInteraction) {
+    var _shadR = exercise === 'resolution' ? Math.max(4, Math.min(7, MAT_W * 0.013))
+                                            : Math.max(3, MAT_W * 0.005);
+    ctx.fillStyle = 'rgba(0,0,0,0.025)';
+    ctx.fillRect(tx - _shadR * 0.8, beamBot - 3, _shadR * 1.6, 6);
   }
 
-  // Cone boundary lines — linear from probe centre, extended to fadeEndY per SH4
+  // Cone boundary lines — linear from probe centre to full beamBot half-width
   ctx.strokeStyle = bColor+'0.45)'; ctx.lineWidth = 1; ctx.setLineDash([3,4]);
-  ctx.beginPath(); ctx.moveTo(tx, beamTop); ctx.lineTo(tx-hWFadeEnd, fadeEndY); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(tx, beamTop); ctx.lineTo(tx+hWFadeEnd, fadeEndY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx, beamTop); ctx.lineTo(tx-hWBot, beamBot); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx, beamTop); ctx.lineTo(tx+hWBot, beamBot); ctx.stroke();
   ctx.setLineDash([]);
 
   // NF/FF divider line
-  if (nearFieldY < fadeEndY-4) {
+  if (nearFieldY < beamBot-4) {
     ctx.strokeStyle = bColor+'0.30)'; ctx.lineWidth = 1; ctx.setLineDash([2,6]);
-    ctx.beginPath(); ctx.moveTo(tx-hWFadeEnd*0.5, nearFieldY); ctx.lineTo(tx+hWFadeEnd*0.5, nearFieldY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tx-hWBot*0.5, nearFieldY); ctx.lineTo(tx+hWBot*0.5, nearFieldY); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = bColor+'0.35)'; ctx.font='8px JetBrains Mono,monospace'; ctx.textAlign='left';
-    ctx.fillText('← far field', tx+hWFadeEnd*0.5+2, nearFieldY+3);
+    ctx.fillText('← far field', tx+hWBot*0.5+2, nearFieldY+3);
   }
 
   ctx.fillStyle = bColor+'0.85)'; ctx.font='10px JetBrains Mono,monospace'; ctx.textAlign='center';
@@ -5892,7 +5988,7 @@ function exportScanPlan(){
   md += '- **Display mode:** ' + (advancedMode ? 'ADVANCED' : 'BASIC') + ' / ' + learnMode.toUpperCase() + '\n';
   md += '- **Probe position X:** ' + Math.round((txX-MAT_X)/MAT_W*240) + ' mm\n';
   md += '- **Sound-path range:** 0..200 mm\n';
-  md += '- **Generated by:** UT NDT Trainer v76\n';
+  md += '- **Generated by:** UT NDT Trainer v77\n';
   // v59 §99 CX — append Corrosion Maze score if a round has been revealed.
   if (mazeScore) {
     var hrPct = (mazeScore.hitRate*100).toFixed(0);
@@ -7603,19 +7699,33 @@ if (savedMode === 'quiz') {
 // runSmokeTests audits that each code appears as a `§N XX —` comment in the page
 // HTML (proves the touch point is tagged); missing codes log a banner warning.
 var __VERSION_DELTA__ = Object.freeze({
-  version: 'v76',
-  // v76 ships 1 rule (SH7 hotfix-of-hotfix per 2026-06-02 EDT user screenshot annotation
-  // uploads/螢幕擷取畫面 2026-06-02 023101.png · "你還是沒有懂我說的陰影的部分"):
-  //   §242 SH7 — Extend SH4/SH6 scope from EX02-only to EX01 porosity cluster too. v75
-  //              said "EX01 不適用 (pore 體積散射不擋 beam)" — that was a scope error.
-  //              Pores DO attenuate beam (scattering loss). drawStandardBeam now detects
-  //              max-sen pore in PORES; if > 0.10 sets hasCut + beamCutY at pore.y +
-  //              defectR_px at pore radius (4-7 px). SH4 fade band + SH6 ghost taper just
-  //              work for EX01 automatically with the larger defect radius giving a wider
-  //              fade band per cluster geometry.
-  // Rule codes align with CLAUDE.md §242. Scope: EX01 porosity (added). v75 SH4/SH5/SH6
-  // for EX02 SDHs continue unchanged.
-  ruleCodes: ['SH7']
+  version: 'v77',
+  // v77 ships 9 rules (SH9-a..SH9-i — paradigm pivot from "beam blockage / shadow" to
+  // "ultrasonic energy redistribution" per 2026-06-02 EDT user "SH9 Physics Correction
+  // Directive"). SH4/SH6/SH7 are DEPRECATED (audit trail kept in CLAUDE.md):
+  //   §243 SH9-a — Incident Wave Preservation: revert all SH4/SH6/SH7 shape changes;
+  //                cone always full from probe to BW; no defect-dependent geometry
+  //   §244 SH9-b — Reflection Becomes Primary Visual: directional specular ripples from
+  //                defect → probe via generic getReflectionPath(); 3 phased packets per
+  //                SDH, 1.5 s cycle; intensity = defAmp (A-scan coupled)
+  //   §245 SH9-c — Porosity Mie Scatter: 7 rays per pore, pore-index-seeded angular
+  //                jitter (non-uniform but stable), expanding radius animation;
+  //                intensity = perPoreAmp (A-scan coupled)
+  //   §246 SH9-d — Minimal Residual Shadow: tiny 2.5% dim spot at BW under defect X;
+  //                pedagogical only, barely visible
+  //   §247 SH9-e — Transmitted Energy: above interactionY full alpha (v74-identical);
+  //                below interactionY alpha × 0.85; gradient-stop split, no shape change
+  //   §248 SH9-f — BW Behavior audit: §1 linear attenuation preserved; smooth gradient
+  //                across porosity/cluster/SDH; no binary on/off
+  //   §249 SH9-g — A-Scan Coupling: every visual ripple intensity uses the same defAmp
+  //                / perPoreAmp the A-scan uses; no sen-proxy in renderer
+  //   §250 SH9-h — Educational Goal (documentation-only): teach reflection/scattering/
+  //                redistribution; NOT teach beam-blockage/flashlight
+  //   §251 SH9-i — Reflection-AScan Amplitude Coupling: _perPoreAmp(i) extracted as
+  //                shared helper; getPoreSignals + SH9-c renderer both read from it
+  // Scope: EX01 5 pores + EX02 4 SDHs (drawStandardBeam path only).
+  // EX03 weld (drawWeldBeam) and EX04/EX05/EX06 untouched.
+  ruleCodes: ['SH9-a','SH9-b','SH9-c','SH9-d','SH9-e','SH9-f','SH9-g','SH9-h','SH9-i']
 });
 // v66 §196 GQ — the rule-code audit serialises the whole document (innerHTML) and regex-tests
 // each code. The HTML never changes after load, so cache the result and skip the expensive
@@ -7676,22 +7786,35 @@ function runSmokeTests(){
   ok('_formatElapsedDelta faster', _formatElapsedDelta({elapsed:40},{elapsed:50}).indexOf('faster') >= 0);
   ok('__VERSION_DELTA__ frozen', Object.isFrozen(__VERSION_DELTA__));
   // v66 §200 GU — the hand-maintained ruleCodes list must match the count of rules adopted
-  // for this ship. v76 adopts 1 SH rule (SH7); update this expected count per ship.
-  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 1, __VERSION_DELTA__.ruleCodes.length);
-  ok('v76 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'SH7');
-  // v76 §242 SH7 — EX01 porosity cluster shadow detection. Verify the algorithm picks the
-  // closest in-beam pore and produces sen > 0.10 when probe sits over the pore.
-  ok('SH7 EX01 sen calc valid', (function(){
-       if (typeof PORES === 'undefined' || PORES.length === 0) return false;
-       var firstPore   = PORES[0];
-       var poreX       = MAT_X + firstPore.rx * MAT_W;
-       var beamHW_local = freq===5 ? MAT_W*0.16 : MAT_W*0.05;
-       // Probe sitting exactly on the pore → sen = 1; should pass 0.10 threshold.
-       var senOn  = Math.max(0, 1 - Math.abs(poreX - poreX)/beamHW_local);
-       // Probe one full beamHW away → sen = 0; should NOT trigger.
-       var senOff = Math.max(0, 1 - beamHW_local/beamHW_local);
-       return senOn > 0.10 && senOff <= 0.10;
+  // for this ship. v77 adopts 9 SH9 rules; update this expected count per ship.
+  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 9, __VERSION_DELTA__.ruleCodes.length);
+  ok('v77 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'SH9-a,SH9-b,SH9-c,SH9-d,SH9-e,SH9-f,SH9-g,SH9-h,SH9-i');
+  // v77 §244 SH9-b — generic getReflectionPath helper present.
+  ok('SH9-b getReflectionPath fn',     typeof getReflectionPath === 'function');
+  ok('SH9-b reflection helper fn',     typeof _drawSH9SpecularReflection === 'function');
+  ok('SH9-b path is generic (not hardcoded up)', (function(){
+       // For a defect below-right of probe, ux should be negative (pointing left to probe)
+       // and uy should be negative (pointing up). Validates no "always upward" assumption.
+       var p = getReflectionPath(100, 100, 50, 20);
+       return Math.abs(p.ux) > 0 && p.uy < 0;
      })());
+  // v77 §245 SH9-c — pore Mie scattering helper present + deterministic seeding.
+  ok('SH9-c pore scatter fn',          typeof _drawSH9PoreScatter === 'function');
+  // v77 §251 SH9-i — per-pore amplitude shared helper.
+  ok('SH9-i _perPoreAmp fn',           typeof _perPoreAmp === 'function');
+  ok('SH9-i _perPoreAmp returns shape', (function(){
+       var r = _perPoreAmp(0);
+       return r && typeof r.amp === 'number' && r.p && typeof r.wx === 'number';
+     })());
+  ok('SH9-i out-of-range pore safe',   _perPoreAmp(-1).amp === 0 && _perPoreAmp(99).amp === 0);
+  // v77 §243 SH9-a — drawStandardBeam no longer modifies cone shape based on defects.
+  // Detected by checking that the deprecated fadeEndY/hWFadeEnd variables are NOT present.
+  ok('SH9-a no fadeEndY in beam code', (function(){
+       var src = drawStandardBeam.toString();
+       return src.indexOf('fadeEndY') < 0 && src.indexOf('hWFadeEnd') < 0;
+     })());
+  // v77 §246 SH9-d — shadow alpha cap. Look for the 0.025 literal in drawStandardBeam.
+  ok('SH9-d shadow alpha ≤ 0.025',     drawStandardBeam.toString().indexOf('0.025') >= 0);
   // v75 §239 SH4 / §240 SH5 / §241 SH6 — crack fade-out animation hotfix.
   ok('SH5 _drawSH5ReflectionWave fn', typeof _drawSH5ReflectionWave === 'function');
   ok('SH5 ripple skipped when sen low', (function(){
