@@ -10,6 +10,71 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ---
 
+## v77 — 2026-06-02 EDT
+
+**Trigger:** user "SH9 Physics Correction Directive (UT Energy Redistribution Model)" + "OK SH9 全採". Major paradigm pivot: beam stops being modeled as light + shadow and becomes acoustic energy that redistributes on contact (reflection / scattering / transmission / minimal residual shadow). All v75/v76 SH4/SH6/SH7 work is reverted; replaced by the SH9 family.
+
+### New rules (CLAUDE.md §243–§251)
+
+| §   | Code   | Theme                                | One-liner |
+|-----|--------|--------------------------------------|-----------|
+| 243 | SH9-a  | Incident Wave Preservation           | Cone always full from probe to BW; no defect-dependent geometry |
+| 244 | SH9-b  | Reflection Primary                   | `getReflectionPath()` generic helper + `_drawSH9SpecularReflection()`: 3 phased ripple packets per SDH travel along def→probe; intensity = defAmp |
+| 245 | SH9-c  | Pore Mie Scatter                     | `_drawSH9PoreScatter()`: 7 rays per pore, pore-index seeded angular jitter; intensity = `_perPoreAmp(i).amp` |
+| 246 | SH9-d  | Minimal Residual Shadow              | 2.5% alpha dim spot at BW under defect X only |
+| 247 | SH9-e  | Transmitted Energy                   | Gradient-stop split at interactionY: above unchanged (v74-identical); below × 0.85 |
+| 248 | SH9-f  | BW Behavior (audit)                  | §1 linear attenuation preserved in `getPlanarSignal().bwAmp` + `getLineDefSignal().bwAmp` |
+| 249 | SH9-g  | A-Scan Coupling                      | Every visual ripple intensity uses the SAME value the A-scan uses |
+| 250 | SH9-h  | Educational Goal (documentation)     | Teach reflection / scattering / redistribution; not flashlight / shadow |
+| 251 | SH9-i  | Amplitude Coupling                   | `_perPoreAmp(i)` extracted as shared helper; getPoreSignals + SH9-c renderer both consume |
+
+### Deprecated rules (audit trail preserved in CLAUDE.md)
+
+- §239 SH4 (smooth fade band) — reverted in drawStandardBeam; replaced by SH9-a + SH9-e
+- §241 SH6 (ghost taper) — reverted; energy past defect now handled by SH9-e gradient stop + SH9-d shadow
+- §242 SH7 (EX01 pore-driven hasCut) — reverted; replaced by SH9-c scatter ripples + SH9-e energy split
+
+### Modified functions
+
+- `getPoreSignals` — refactored to call `_perPoreAmp(i)` per pore (SH9-i shared source). Output entries now include `poreIdx` field.
+- `drawStandardBeam` — substantial rewrite (SH9-a + SH9-e + SH9-d). `ps2 / hasCut / beamCutY / fadeEndY / hWFadeEnd / ghost` all gone. New `hasInteraction / interactionY` only drives the gradient-stop split, never the polygon shape. `_v74AlphaAt(t)` inner helper computes the v74-equivalent gradient value at any normalised position so the upper portion stays bit-identical to v74.
+- EX01 pore drawing loop (`drawScan` `exercise==='resolution'` branch) — appends `_drawSH9PoreScatter(ctx, wx, wy, rr, _perPoreAmp(pi).amp, pi)` after each pore (keeps SH5 surface highlight per decision 2).
+- EX02 `_drawSdh` helper (inside `drawScan` `exercise==='penetration'` branch) — appends `_drawSH9SpecularReflection(ctx, cx, cy, txX, SURF_Y, sdhSig.defAmp)` after the cyan SH5 highlight.
+
+### New functions
+
+- `_perPoreAmp(poreIdx)` — SH9-i shared per-pore amp formula. Returns `{amp, sen, p, wx}`. Out-of-range index returns safe zero.
+- `getReflectionPath(defX, defY, probeX, probeY)` — SH9-b generic. Returns `{dx, dy, len, ux, uy}` — unit vector pointing FROM defect TO probe. NEVER hardcodes upward. Future-compatible with EX03 weld 45°/60°/70° / PAUT / sector scans.
+- `_drawSH9SpecularReflection(ctx, defX, defY, probeX, probeY, defAmp)` — directional cyan ripple packet from defect along reflection path. 3 phased packets staggered 500 ms each (1500 ms cycle). Focused cone half-width scales with defAmp.
+- `_drawSH9PoreScatter(ctx, poreX, poreY, poreR, poreAmp, poreIdx)` — pore Mie scattering. 7 rays at deterministic pseudo-random angles seeded by poreIdx; phase offsets per ray; expanding radius animation; alpha fades with phase.
+
+### Smoke tests
+
+- `ruleCodes.length === 9` + matches `'SH9-a,SH9-b,SH9-c,SH9-d,SH9-e,SH9-f,SH9-g,SH9-h,SH9-i'`
+- `getReflectionPath` returns generic non-upward result for off-axis probe
+- `_drawSH9SpecularReflection` / `_drawSH9PoreScatter` present
+- `_perPoreAmp` returns the expected shape + safe on out-of-range
+- `drawStandardBeam.toString()` no longer contains `fadeEndY` / `hWFadeEnd` (SH9-a revert verified by code inspection)
+- `drawStandardBeam.toString()` contains the SH9-d 0.025 shadow alpha literal
+
+### Touched files
+
+- `今日工作區/ut-scanner-v77.html` (renamed from v76; SH9 family + 3 user-visible version strings + `__VERSION_DELTA__`)
+- `今日工作區/CLAUDE.md` (§243-§251 added; §239 SH4 / §241 SH6 / §242 SH7 marked DEPRECATED with audit-trail comments)
+- `今日工作區/CHANGELOG.md` (this entry)
+- `今日工作區/AI優化與改善建議書.md` (SH9-a..SH9-i marked ✅ shipped; v78 = M5-1/2/3/4 PE/PC/TT next)
+- Vault `wiki/acoustic-shadow-bea.md` (created during SH8 research; physics correct but paradigm direction wrong — kept for reference, superseded by SH9 directive)
+
+### Notes
+
+- This is the third hotfix attempt at the same complaint. v75 (SH4/SH6) used a sharp fade band, v76 (SH7) extended scope, both still felt like "beam blockage" to the user. v77 SH9 finally pivots away from optical-shadow modeling entirely.
+- The cone shape is now byte-identical to v74 above the defect; only the gradient gets two extra colour stops below the interaction point.
+- SH9-h is a documentation-only rule (no code touch points) — included to anchor all future visual decisions to the energy-redistribution paradigm.
+- EX03 weld is NOT in scope per decision 3 (user agreed). drawWeldBeam has its own ray-marching + per-leg overlap logic (§50 AR-full) and will be updated to SH9 paradigm in a separate batch later.
+- The Vault note `wiki/acoustic-shadow-bea.md` was written during SH8 brainstorming but the user pointed out the paradigm direction itself was wrong. The note's BEA / Mirror-Shadow / umbra-penumbra physics is still correct; just not the right teaching frame for this simulator. Note kept for reference.
+
+---
+
 ## v76 — 2026-06-02 EDT
 
 **Trigger:** user "先把我說的陰影的部分處理好其他的先不動" with annotated screenshot `uploads/螢幕擷取畫面 2026-06-02 023101.png` showing purple paint over the cone region below the EX01 porosity cluster (= "this region should be dark / shadowed but it's currently bright"). v75's SH4/SH6 rules explicitly excluded EX01 with the comment "pore 體積散射不擋 beam, 無 cut" — that was a scope error. Pores DO attenuate beam through volumetric scattering. v76 fixes the scope only; no other changes.
