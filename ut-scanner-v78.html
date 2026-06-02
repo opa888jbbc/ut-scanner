@@ -279,7 +279,7 @@
 <meta charset="UTF-8">
 <!-- v50 α5 — removed user-scalable=no + maximum-scale to allow mobile pinch zoom -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>UT NDT Training Simulator — v77</title>
+<title>UT NDT Training Simulator — v78</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -973,7 +973,7 @@ body.alarm-pulse::before {
 <body>
 
 <div class="header">
-  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v77</span></h1>
+  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v78</span></h1>
   <span class="badge">Pulse-Echo</span>
   <span class="badge" id="freq-badge">5 MHz</span>
   <span class="badge ok" id="ex-badge">Exercise 1</span>
@@ -4329,21 +4329,41 @@ function drawStandardBeam(ctx, bColor) {
   var ps2 = exercise==='penetration' ? getPlanarSignal() : null;
   var hasInteraction = false;
   var interactionY   = beamBot;
+  // v78 §252-§255 XS-1 — also track strongest defect's X, visual radius, and amp so the
+  // gradient shadow layer (rendered below) can anchor to the actual defect position and
+  // scale opacity with A-scan amplitude (per §255 XS-1-d coupling rule).
+  var interactionX   = tx;
+  var interactionR   = 3;
+  var interactionAmp = 0;
   if (ps2) {
     // EX02 — find strongest SDH overlap (defAmp is per-defect; pick max).
     var sdhKeys = ['shallow','ref','deep','far'];
     var bestOverlap = 0;
+    var _sdhVisR = Math.max(3, MAT_W * 0.005); // §43 AN — Φ 3 mm SDH visual radius
     for (var _sk=0; _sk<sdhKeys.length; _sk++) {
       var _e = ps2[sdhKeys[_sk]];
-      if (_e && _e.overlap > bestOverlap) { bestOverlap = _e.overlap; interactionY = _e.defCanvasY; }
+      if (_e && _e.overlap > bestOverlap) {
+        bestOverlap   = _e.overlap;
+        interactionY  = _e.defCanvasY;
+        interactionX  = (_e.defLeft + _e.defRight) / 2;
+        interactionR  = _sdhVisR;
+        interactionAmp = _e.defAmp;
+      }
     }
     if (bestOverlap > 0.05) hasInteraction = true;
   } else if (exercise === 'resolution' && typeof PORES !== 'undefined' && PORES.length > 0) {
     // EX01 — SH9-i: use amplitude-coupled _perPoreAmp, not geometric sen-proxy.
     var bestAmp = 0;
+    var _poreVisR = Math.max(4, Math.min(7, MAT_W * 0.013)); // EX01 pore visual radius
     for (var _pi=0; _pi<PORES.length; _pi++) {
       var _s = _perPoreAmp(_pi);
-      if (_s.amp > bestAmp) { bestAmp = _s.amp; interactionY = MAT_Y + _s.p.ry * MAT_H; }
+      if (_s.amp > bestAmp) {
+        bestAmp = _s.amp;
+        interactionY = MAT_Y + _s.p.ry * MAT_H;
+        interactionX = _s.wx;
+        interactionR = _poreVisR;
+        interactionAmp = _s.amp;
+      }
     }
     if (bestAmp > 0.05) hasInteraction = true;
   }
@@ -4438,14 +4458,36 @@ function drawStandardBeam(ctx, bColor) {
   ctx.lineTo(tx+hWBot, beamBot);        ctx.lineTo(tx-hWBot, beamBot);
   ctx.closePath(); ctx.fill();
 
-  // v77 §246 SH9-d — Minimal residual shadow. A tiny dim spot at the BW line directly
-  // under the strongest defect's X projection. Max alpha 0.025 (= 2.5% dimming). Purely
-  // pedagogical cue; should be barely noticeable.
-  if (hasInteraction) {
-    var _shadR = exercise === 'resolution' ? Math.max(4, Math.min(7, MAT_W * 0.013))
-                                            : Math.max(3, MAT_W * 0.005);
-    ctx.fillStyle = 'rgba(0,0,0,0.025)';
-    ctx.fillRect(tx - _shadR * 0.8, beamBot - 3, _shadR * 1.6, 6);
+  // v78 §252-§255 XS-1 — Gradient acoustic shadow (B 方案 並存模式 with SH9 reflection).
+  // Per §246 SH9-d updated: alpha cap raised from 0.025 to 0.30~0.50 via createLinearGradient.
+  // Per §253 XS-1-b: start alpha 0.42 static / 0.50 dragging, mid 0.18 / 0.22, end 0.00.
+  // Per §254 XS-1-c: linear gradient along beam axis (vertical for direct contact),
+  //   polygon half-width = defR × 2 + 6 px (slightly wider than defect to avoid hard edges).
+  // Per §255 XS-1-d: alpha scales with defAmp — shadow strength mirrors A-scan BW reduction
+  //   (BW already linearly attenuated by bwBlockFactor in getPlanarSignal / getLineDefSignal).
+  // SH9-a cone shape stays 100% unchanged — this is an OVERLAY layer, not a cone modification.
+  if (hasInteraction && interactionAmp > 0.05) {
+    var _shadowTop = interactionY + interactionR;          // start just below defect lower edge
+    var _shadowBot = beamBot - 5;                          // stop just before BW line
+    if (_shadowBot > _shadowTop + 4) {
+      var _gradHW   = interactionR * 2 + 6;                // §253 polygon half-width
+      var _isDrag   = (typeof dragging !== 'undefined' && dragging);
+      var _ampScale = Math.min(1, interactionAmp / 0.35);  // §254 strength scaling
+      var _topAlpha = (_isDrag ? 0.50 : 0.42) * _ampScale;
+      var _midAlpha = (_isDrag ? 0.22 : 0.18) * _ampScale;
+      var _shadGrad = ctx.createLinearGradient(interactionX, _shadowTop, interactionX, _shadowBot);
+      _shadGrad.addColorStop(0,   'rgba(20,30,50,' + _topAlpha.toFixed(3) + ')');
+      _shadGrad.addColorStop(0.5, 'rgba(20,30,50,' + _midAlpha.toFixed(3) + ')');
+      _shadGrad.addColorStop(1,   'rgba(20,30,50,0)');
+      ctx.fillStyle = _shadGrad;
+      ctx.beginPath();
+      ctx.moveTo(interactionX - _gradHW, _shadowTop);
+      ctx.lineTo(interactionX + _gradHW, _shadowTop);
+      ctx.lineTo(interactionX + _gradHW, _shadowBot);
+      ctx.lineTo(interactionX - _gradHW, _shadowBot);
+      ctx.closePath();
+      ctx.fill();
+    }
   }
 
   // Cone boundary lines — linear from probe centre to full beamBot half-width
@@ -5988,7 +6030,7 @@ function exportScanPlan(){
   md += '- **Display mode:** ' + (advancedMode ? 'ADVANCED' : 'BASIC') + ' / ' + learnMode.toUpperCase() + '\n';
   md += '- **Probe position X:** ' + Math.round((txX-MAT_X)/MAT_W*240) + ' mm\n';
   md += '- **Sound-path range:** 0..200 mm\n';
-  md += '- **Generated by:** UT NDT Trainer v77\n';
+  md += '- **Generated by:** UT NDT Trainer v78\n';
   // v59 §99 CX — append Corrosion Maze score if a round has been revealed.
   if (mazeScore) {
     var hrPct = (mazeScore.hitRate*100).toFixed(0);
@@ -7699,33 +7741,23 @@ if (savedMode === 'quiz') {
 // runSmokeTests audits that each code appears as a `§N XX —` comment in the page
 // HTML (proves the touch point is tagged); missing codes log a banner warning.
 var __VERSION_DELTA__ = Object.freeze({
-  version: 'v77',
-  // v77 ships 9 rules (SH9-a..SH9-i — paradigm pivot from "beam blockage / shadow" to
-  // "ultrasonic energy redistribution" per 2026-06-02 EDT user "SH9 Physics Correction
-  // Directive"). SH4/SH6/SH7 are DEPRECATED (audit trail kept in CLAUDE.md):
-  //   §243 SH9-a — Incident Wave Preservation: revert all SH4/SH6/SH7 shape changes;
-  //                cone always full from probe to BW; no defect-dependent geometry
-  //   §244 SH9-b — Reflection Becomes Primary Visual: directional specular ripples from
-  //                defect → probe via generic getReflectionPath(); 3 phased packets per
-  //                SDH, 1.5 s cycle; intensity = defAmp (A-scan coupled)
-  //   §245 SH9-c — Porosity Mie Scatter: 7 rays per pore, pore-index-seeded angular
-  //                jitter (non-uniform but stable), expanding radius animation;
-  //                intensity = perPoreAmp (A-scan coupled)
-  //   §246 SH9-d — Minimal Residual Shadow: tiny 2.5% dim spot at BW under defect X;
-  //                pedagogical only, barely visible
-  //   §247 SH9-e — Transmitted Energy: above interactionY full alpha (v74-identical);
-  //                below interactionY alpha × 0.85; gradient-stop split, no shape change
-  //   §248 SH9-f — BW Behavior audit: §1 linear attenuation preserved; smooth gradient
-  //                across porosity/cluster/SDH; no binary on/off
-  //   §249 SH9-g — A-Scan Coupling: every visual ripple intensity uses the same defAmp
-  //                / perPoreAmp the A-scan uses; no sen-proxy in renderer
-  //   §250 SH9-h — Educational Goal (documentation-only): teach reflection/scattering/
-  //                redistribution; NOT teach beam-blockage/flashlight
-  //   §251 SH9-i — Reflection-AScan Amplitude Coupling: _perPoreAmp(i) extracted as
-  //                shared helper; getPoreSignals + SH9-c renderer both read from it
+  version: 'v78',
+  // v78 ships 4 rules (XS-1-a..XS-1-d — 並存模式 per 2026-06-02 EDT user "XS-1 走 B 方案"
+  // directive). SH9 reflection ripples retained; XS-1 adds gradient acoustic shadow as
+  // overlay layer. SH9-a cone geometry unchanged. SH9-d alpha cap raised from 0.025 to
+  // 0.30~0.50 via createLinearGradient. SH9-h clarified — blockage paradigm still NOT
+  // taught, gradient shadow is BW-path attenuation cue (not cone-shape modification).
+  //   §252 XS-1-a — Coexistence Paradigm: SH9 reflection ripples kept; XS-1 adds
+  //                 independent gradient shadow layer; cone geometry unchanged
+  //   §253 XS-1-b — Alpha cap raised 0.025 → 0.30~0.50 via createLinearGradient,
+  //                 dragging boost +0.08, color rgba(20,30,50,α) deep-blue-grey
+  //   §254 XS-1-c — Linear gradient along beam axis (vertical for direct contact),
+  //                 polygon half-width = defR×2+6 px, strongest defect wins (one shadow)
+  //   §255 XS-1-d — A-scan BW echo amplitude coupled with shadow alpha; both driven
+  //                 by overlap × bwBlockFactor and defAmp from getPlanarSignal/getLineDefSignal
   // Scope: EX01 5 pores + EX02 4 SDHs (drawStandardBeam path only).
-  // EX03 weld (drawWeldBeam) and EX04/EX05/EX06 untouched.
-  ruleCodes: ['SH9-a','SH9-b','SH9-c','SH9-d','SH9-e','SH9-f','SH9-g','SH9-h','SH9-i']
+  // EX03 weld (drawWeldBeam) backport queued for v79+. EX04/EX05/EX06 untouched.
+  ruleCodes: ['XS-1-a','XS-1-b','XS-1-c','XS-1-d']
 });
 // v66 §196 GQ — the rule-code audit serialises the whole document (innerHTML) and regex-tests
 // each code. The HTML never changes after load, so cache the result and skip the expensive
@@ -7786,9 +7818,9 @@ function runSmokeTests(){
   ok('_formatElapsedDelta faster', _formatElapsedDelta({elapsed:40},{elapsed:50}).indexOf('faster') >= 0);
   ok('__VERSION_DELTA__ frozen', Object.isFrozen(__VERSION_DELTA__));
   // v66 §200 GU — the hand-maintained ruleCodes list must match the count of rules adopted
-  // for this ship. v77 adopts 9 SH9 rules; update this expected count per ship.
-  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 9, __VERSION_DELTA__.ruleCodes.length);
-  ok('v77 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'SH9-a,SH9-b,SH9-c,SH9-d,SH9-e,SH9-f,SH9-g,SH9-h,SH9-i');
+  // for this ship. v78 adopts 4 XS-1 rules; update this expected count per ship.
+  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 4, __VERSION_DELTA__.ruleCodes.length);
+  ok('v78 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'XS-1-a,XS-1-b,XS-1-c,XS-1-d');
   // v77 §244 SH9-b — generic getReflectionPath helper present.
   ok('SH9-b getReflectionPath fn',     typeof getReflectionPath === 'function');
   ok('SH9-b reflection helper fn',     typeof _drawSH9SpecularReflection === 'function');
@@ -7813,8 +7845,25 @@ function runSmokeTests(){
        var src = drawStandardBeam.toString();
        return src.indexOf('fadeEndY') < 0 && src.indexOf('hWFadeEnd') < 0;
      })());
-  // v77 §246 SH9-d — shadow alpha cap. Look for the 0.025 literal in drawStandardBeam.
-  ok('SH9-d shadow alpha ≤ 0.025',     drawStandardBeam.toString().indexOf('0.025') >= 0);
+  // v78 §253 XS-1-b — SH9-d alpha cap raised. drawStandardBeam now uses createLinearGradient
+  // for the shadow layer (replacing the old 0.025 dim spot).
+  ok('XS-1-b createLinearGradient in beam', drawStandardBeam.toString().indexOf('createLinearGradient(interactionX') >= 0);
+  ok('XS-1-b alpha cap in range (0.42 static / 0.50 dragging)', (function(){
+       var src = drawStandardBeam.toString();
+       return src.indexOf('0.42') >= 0 && src.indexOf('0.50') >= 0;
+     })());
+  // v78 §252 XS-1-a — SH9-a cone shape still preserved (cone polygon still goes to beamBot,
+  // gradient shadow is an OVERLAY layer not a cone modification).
+  ok('XS-1-a cone polygon still to beamBot', (function(){
+       var src = drawStandardBeam.toString();
+       return src.indexOf('hWBot, beamBot') >= 0 && src.indexOf('-hWBot, beamBot') >= 0;
+     })());
+  // v78 §255 XS-1-d — A-scan amp coupling: getPlanarSignal returns bwAmp and per-defect defAmp
+  // so the gradient shadow alpha (driven by interactionAmp) mirrors A-scan BW reduction.
+  ok('XS-1-d getPlanarSignal returns bwAmp + defAmps', (function(){
+       var ps = getPlanarSignal();
+       return ps && typeof ps.bwAmp === 'number' && ps.shallow && typeof ps.shallow.defAmp === 'number';
+     })());
   // v75 §239 SH4 / §240 SH5 / §241 SH6 — crack fade-out animation hotfix.
   ok('SH5 _drawSH5ReflectionWave fn', typeof _drawSH5ReflectionWave === 'function');
   ok('SH5 ripple skipped when sen low', (function(){
