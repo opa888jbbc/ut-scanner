@@ -930,7 +930,7 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
   - 多 phased packet(3 個 phase 錯開 500ms)= 連續往回打的波包感
   - 適用範圍:EX02 4 SDH(SHALLOW / REF / DEEP / FAR 各套),亮度用 `ps.{name}.defAmp` 直接驅動
 
-245\. 【SH9-c · Porosity Scattering Model】Porosity 是 Mie 散射器(per Vault `defect-types-echoes.md`),不是鏡面反射:
+245\. 【SH9-c · Porosity Scattering Model】**視覺於 2026-06-03 EDT 老闆指令移除**(「叢式特效不需要」,3 張截圖)— `_drawSH9PoreScatter` 函數**保留定義**(smoke `SH9-c pore scatter fn` 守衛)但**不再被呼叫**;EX01 pore 只留圓形 + amp glow。本條保留 audit trail。原物理意圖如下:Porosity 是 Mie 散射器(per Vault `defect-types-echoes.md`),不是鏡面反射:
   - `_drawSH9PoreScatter(ctx, poreX, poreY, poreR, poreAmp, poreIdx)`:每顆 pore 發 6-8 條 ripple,角度用 **`poreIdx` 為 seed 的固定 deterministic 隨機**(`Math.sin(poreIdx × 13.37 + k × 2.71) * 0.5 + 0.5` 之類的偽隨機產生器),確保不閃但有亂感
   - 每條 ripple 用 `performance.now() / 1200 + k × 0.13` 為 phase,半徑 `poreR + progress × 14` px,alpha `poreAmp × (1 − progress) × 0.55`
   - **絕對不能完美 360° 均勻**(那會看起來像 LED 不像散射) — 6-8 個 random 方向比較像真實 isotropic-with-noise
@@ -942,8 +942,8 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
   - 教學意圖:讓學生**理論上**知道「下方有些微能量損失」,但**視覺上不擾**反射主角
   - 適用範圍:EX01 + EX02 同 SH9-a 範圍
 
-247\. 【SH9-e · Transmitted Energy Model】Defect 下方的 beam 持續傳播到 BW,只是 opacity 略減:
-  - `drawStandardBeam` 不再用單一 polygon 整個 cone。改用**兩段 polygon**:上半(beamTop → defectY)alpha = 100%(原 gradient),下半(defectY → beamBot)alpha × **0.85**(全段乘 0.85 表示能量損失)
+247\. 【SH9-e · Transmitted Energy → Occlusion Model】**2026-06-03 EDT 五/六度修訂(參考影片 videolibrary.teachable.com)**:原「下方 ×0.85 微減」**改為比例式遮擋** — 缺陷下方 beam alpha × `(1 − interactionBlock × 0.97)`(六度修訂:0.94→**0.97**,老闆要更明顯,全遮下方 ≈0.03 幾乎全無);bloom 兩層套同因子淡化,殘影一起消。**interactionBlock 來源**:EX01 = clusterCoverage(0..1,本就明顯);EX02 = **正規化 block**(`getPlanarSignal().block` = maxOverlap / 置中時overlap)—— Φ3mm SDH 的原始 overlap 才 ~0.075,直接用會幾乎無效果,正規化後置中→block=1,**BW 也 = maxBw×(1−block) 同步歸零**(符合 §1「完全對準缺陷時完全歸零」)。cone 幾何仍到 beamBot(SH9-a 形狀不變,只改 alpha)。原文如下(已被取代,保 audit):
+  - `drawStandardBeam` 不再用單一 polygon 整個 cone。改用**兩段 polygon**:上半(beamTop → defectY)alpha = 100%(原 gradient),下半(defectY → beamBot)alpha × ~~0.85~~ **(改為 ×(1−overlap×0.94))**
   - 沒有 defect interaction 時(無任何 sen > 0.10):整 cone 單 polygon 走原 gradient,跟 v73 之前一模一樣
   - 多 defect 時:用最強 defect 的 Y 為分界線(`max sen pore.y` for EX01;`max overlap SDH.y` for EX02)
   - **形狀完全不變** — 跟 SH9-a 互補,a 管「上方完整」,e 管「下方略減」
@@ -988,27 +988,52 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
   - EX03 weld(走 `drawWeldBeam`)v78 暫不適用,排 v79+ backport
   - EX04/EX05/EX06 完全不適用(無 cone paradigm)
 
-253\. 【XS-1-b · SH9-d Alpha Cap → 0.40~0.46 + 漸進羽化】§246 SH9-d 原「最大 alpha 0.025、極窄 column」極簡殘留 cue **撤回**。歷經三次老闆修訂(0.42/0.50 無下限→看不見 → 加 0.70 硬下限→變「整塊瞬間跳出的梯形」 → **2026-06-03 EDT 三度修訂:去硬下限、改 smoothstep 漸進 + 頂部羽化**,讓黃光「漸漸被藍球擋住消失」而非整塊突變):
+253\. 【XS-1-b · ~~SH9-d Alpha Cap / dark overlay~~ → 五度修訂改 BEAM-ALPHA OCCLUSION】**2026-06-03 EDT 五度修訂(參考影片)**:整個 `rgba(20,30,50)` **深藍陰影疊層全部撤除** — 影片證明遮擋是「黃光本身在缺陷下方漸漸消失」,非另疊一層暗色。改由 §247 SH9-e occlusion(beam alpha × (1−overlap×0.94))實現,§252-255 XS-1 疊層範式作廢(保 comment tag 供 rule-audit + audit trail)。**以下為已撤除的 dark-overlay 歷史**:§246 SH9-d 原「最大 alpha 0.025、極窄 column」極簡殘留 cue **撤回**。歷經四次老闆修訂(0.42/0.50 無下限→看不見 → 加 0.70 硬下限→「整塊瞬間跳出」 → 去硬下限+smoothstep+羽化 → **2026-06-03 EDT 四度修訂:陰影錨點從光束軸 `tx` 改為球體位置 `interactionX`,改成球體正後方的聚焦陰影錐**,修正「偏側邊的球害空光束變暗(#2)」+「被打到的球後方沒陰影(#3)」):
   - **峰值 alpha**(球體正後方,gradient 20% 處):**0.40 static / 0.46 dragging** × `_strength`
   - **頂部羽化**(gradient 0% = 球體接觸點):**0.00** — 球體處黃光仍可見,往後方才漸暗(非硬切起點)
   - **gradient 終點 alpha**(BW 上緣前 2px):**0.00**(完全透明,缺陷以下到底波漸淡)
-  - **gradient 寬度**:**跟隨聲束錐體邊界的梯形** — 每深度 y 半寬 = `hWBot × (y − beamTop) / fullD`,軸心 `tx`,完整覆蓋錐體後半段(防側邊穿透)
+  - **gradient 寬度(四度修訂)**:**球體正後方的聚焦陰影錐**,錨心 = 球體 `interactionX`(**非光束軸 tx**)。半寬從 `interactionR × 1.1`(球體處)外擴到 `min(interactionR × 3.2, coneHWAt(BW))`(略展但 clamp 在錐體內,非整個錐體)。對應小反射體的幾何陰影,且只在被打到的球後方,不會害空光束變暗
   - 顏色:`rgba(20, 30, 50, α)`(深藍灰,與背景同色系不搶 beam 主視覺)
   - **漸進強度(關鍵修正三,取代硬下限)**:`_strength = smoothstep((amp − 0.02) / 0.28)`,**無 Math.max 下限**。探頭滑過球體時陰影平滑淡入淡出;強回波到 0.40/0.46,弱回波自然漸淡(這才是「漸漸」而非「突然整塊」)
 
 254\. 【XS-1-c · createLinearGradient 軸向實作】陰影必須**沿 beam 中軸方向**漸層,不能水平也不能垂直 hard-coded:
   - **gradient 起點座標** = defect 上緣中心(`defX, defY - defR`)
   - **gradient 終點座標** = beam 撞 BW 處`(defX + (MAT_Y+MAT_H - defY)*sin(bAngle)/cos(bAngle), MAT_Y+MAT_H)`,直探頭預設 sin/cos = 0/1 故終點 = `(defX, MAT_Y+MAT_H)`
-  - polygon 4 頂點:`tx ± _coneHWAt(_shadowTop)` 在 defect 接觸深度、`tx ± _coneHWAt(_shadowBot)` 在 BW 前,形成**跟隨錐體張角的梯形**(上窄下寬,完整套住整個錐體後半段)
-  - **絕對禁止**:用 `createRadialGradient`(圓形不對應 beam 物理)/ 用 0°/90° hard-coded 軸(未來 PAUT/sector 即無法 reuse)/ **用固定窄寬度(會被錐體兩側黃光穿透)**
+  - polygon 4 頂點(四度修訂):`interactionX ± (interactionR × 1.1)` 在球體深度、`interactionX ± min(interactionR × 3.2, coneHWAt(BW))` 在 BW 前,形成**球體正後方的聚焦陰影錐**(上窄下略寬,錨在球體不是 tx)
+  - **絕對禁止**:用 `createRadialGradient`(圓形不對應 beam 物理)/ 用 0°/90° hard-coded 軸(未來 PAUT/sector 即無法 reuse)/ **錨在光束軸 tx(會害偏側邊的球在空光束處變暗 — #2 bug)**
   - 多 defect(EX01 5 pore 或 EX02 4 SDH)同時 hit 時:**只畫最強 defect 的陰影**(同 §232 SH2 shallowest-first 邏輯但這裡用 strongest amp;sen × poreAmp 或 ps.{name}.defAmp 為排序鍵)
   - 強度 amp scaling(**2026-06-03 EDT 三度修訂,改 smoothstep 漸進**):峰值 alpha = `0.40 × smoothstep((defAmp − 0.02) / 0.28)`,**無硬下限**;defAmp < 0.02 才完全不畫(避免無回波卻有陰影)。曾用 `Math.max(0.70,…)` 硬下限→「整塊梯形瞬間跳出」被老闆打回,改 smoothstep 平滑淡入淡出
 
 255\. 【XS-1-d · A-Scan BW Echo 與陰影同步衰減驗證】CLAUDE.md §1 + §248 SH9-f 已規定「BW 線性比例衰減」,XS-1-d 在此**顯式驗證 + smoke test reinforce**:陰影視覺強度 ⇔ A-scan BW peak amp **必同源同步**:
   - 陰影 alpha 用 `defAmp`(主導 defect 的 A-scan 貢獻);BW 衰減用 `bwAmp = bwAmpMax × (1 - overlap × overlapToBwLoss)` — 兩者皆從 `getPlanarSignal()`(EX02)或 `getLineDefSignal()`(EX01)同一回傳物件取得
-  - 視覺對應 invariant:overlap = 0 → 陰影 α = 0 + BW 全亮 / overlap = 1 → 峰值 α ≈ 0.40(拖曳 0.46)+ BW 接近 0 / overlap = 0.5 → α 經 smoothstep 約半強(平滑,無硬下限)+ BW ≈ 50%。陰影梯形寬度跟隨錐體(無側邊穿透),頂部羽化從球體淡入、到底波淡出 → 黃光「漸漸被擋住消失」而非整塊突變
+  - 視覺對應 invariant:overlap = 0 → 陰影 α = 0 + BW 全亮 / overlap = 1 → 峰值 α ≈ 0.40(拖曳 0.46)+ BW 接近 0 / overlap = 0.5 → α 經 smoothstep 約半強(平滑,無硬下限)+ BW ≈ 50%。陰影是**球體正後方的聚焦陰影錐**(錨 interactionX,非 tx),頂部羽化從球體淡入、到底波淡出 → 球被打到才在其後方出現陰影,黃光「漸漸被擋住消失」;偏側邊的球不會害空光束變暗
   - 學生拖探頭過 defect 看到的視覺:**陰影漸長 + BW 漸淡** 同步呼吸,**絕對不可能**陰影出現但 BW 沒掉(物理矛盾)
   - smoke 斷言:`drawStandardBeam.toString()` 必含 `createLinearGradient` 字串 + `'XS-1'` comment tag;`getPlanarSignal()` 回傳 obj 必含 `bwAmp` 欄位且 `0 ≤ bwAmp ≤ bwAmpMax`
+
+
+
+（以下規則 256\~259 由使用者於 2026-06-03 EDT「全採 B1–B4(EX01+EX02 一起)」後納入,對應參考影片 `uploads/2026-06-02-18-17-40.mp4`（videolibrary.teachable.com「Step 1 of 5 — Set Maximum」）。第四次處理同一抱怨;前 v75/76/77 皆只改陰影漸層數學,本批改「直接重現教學三要素 + 清場」。BO = Beam Overhaul。）
+
+
+
+256\. 【BO-1 · 入射聲束加粗提亮(Bold Incident Cone)】參考影片的黃色聲束是**粗、亮、不透明**的平滑錐;v78 核心漸層 alpha 僅 0.52 半透明,洗成細淡條,陰影自然看不出。BO-1 把 `drawStandardBeam` 核心 `_v74AlphaAt` 與 cone gradient 起點 alpha 0.52→0.82、中段 0.20→0.46、遠場 0.05→0.14,讓入射錐讀起來是教學那種飽和亮黃。bloom glow 層保留。
+
+257\. 【BO-2 · ~~缺陷反射做明顯~~ → 反射全撤(2026-06-03 EDT 使用者明示「不需要有東西從球體反射回來,只要遮蔽」)】**唯一要的效果是遮蔽,不要任何反射視覺。** 撤除:EX01 pore 的 `_drawSH5ReflectionWave`、EX02 SDH 的 `_drawSH5ReflectionWave` + `_drawSH9SpecularReflection`(指向 probe 的回波封包)、EX02「reflected-ray cue」(缺陷往上到 probe 的虛線+箭頭)。三個 helper 函式定義**保留**(smoke guard),僅不再呼叫。SDH/pore 物體本身照常畫(目標需可見)。原 §240 SH5 / §244 SH9-b / §245 SH9-c 的 standard-beam 反射視覺於此一併作廢。教訓:使用者只要「黃光照到東西被擋住」,不要再自作主張加反射/散射/cue。
+
+258\. 【BO-3 · 遮蔽(occlusion)做強 —— 這才是唯一要的效果】使用者要的是「黃色聲波照到東西 → 被遮蔽 → 後方變暗(陰影)」。v79 初版用 ×0.75(全擋殘 0.31)被打回「還是很明顯穿透」。改用 **smoothstep 強遮蔽**:`_occ = smoothstep(interactionBlock)`(高覆蓋→趨近 1)、`_belowFactor = _bloomBelow = 1 − _occ×0.95`。EX01 cluster overlap≈0.92 → _occ≈0.98 → 殘 ~0.07,對比上方 0.82 亮錐 ≈ 11:1 = 黃光在球體後方近乎消失 = 明確遮蔽;部分覆蓋時 smoothstep 平滑(§1 嚴禁突兀切換)。配合 BO-1 粗亮錐,上亮下暗一眼可見。**不加深藍 overlay**(§253 已證偽);遮蔽 = 黃光本身被擋掉,非另疊暗色。
+
+259\. 【BO-4 · 聲束區清場(Declutter)】影片背景乾淨、聲束是主角;v78 聲束被近場帶 / 錐邊虛線 / θ 標籤 / sound-path 虛線蓋住。BO-4 淡化(不刪)這些:近場帶 fill 0.10→0.05、stroke 0.35→0.18、label 0.78→0.42;錐邊虛線 0.45→0.20;NF/FF divider 0.30→0.16 + far-field label 0.35→0.20;θ 標籤 0.85→0.45;EX02 sound-path 虛線 0.32→0.16 + mm label 0.65→0.38。
+
+260\. 【BO-5 · 動態裁切界面高光線(Clipped Interface Highlight)—— 使用者 2026-06-04 EDT 紅燈授權】光束打到水平缺陷(EX02 SDH)時,在缺陷頂面沿「光束與缺陷**實際重疊**的區段」畫一條青色高光線,模擬超音波到達界面;**取代** v79 一度嘗試的黃光波前/弧線動畫(使用者明示「方向不對,不用往黃色光束方向去做」)。
+  - **位置**:`drawStandardBeam` 尾端(beamGrad + 外框線之後),僅當 `ps2 && hasInteraction`(EX02 確實打到缺陷)。
+  - **幾何**:`hwAtY` = 近場半寬 `(D_mm/100)·fullD·0.5`;若 `interactionY > nearFieldY` 再加發散量 `(interactionY − nearFieldY)·tan(bAngle)`。`beamL/R = txX ∓ hwAtY`。交集 `isL = Math.max(命中SDH.defLeft, beamL)`、`isR = Math.min(命中SDH.defRight, beamR)`;`isR > isL` 才畫。
+  - **命中 SDH** = `ps2.{shallow/ref/deep/far}` 中 overlap 最大者(對齊 `interactionY`,避免用到固定的 deep 邊界)。
+  - **樣式**:`rgba(0,229,255, alphaI)`(alpha 綁該深度光束強度)、`lineWidth 3`、`lineCap round`、`shadowColor rgba(0,229,255,0.9)` + `shadowBlur 8`,畫完 `shadowBlur=0` 復原。
+  - **慢慢漸漸消失**:光束移開時交集區段 `isR−isL` 縮短 → 高光線變短至 0(自然淡出,非開關)。
+  - **硬性限制(使用者要求)**:純疊加 overlay,**絕不更改/破壞** `beamGrad`(黃光漸層)、`interactionBlock`(陰影遮蔽)或任何既有幾何變數。
+  - EX01 pore(藍球)同概念可比照加,但本批先依使用者精準 spec 落 EX02;EX01 視回饋再補。
+
+（備註:§252-255 XS-1 dark-overlay 疊層範式已於 v78 撤,BO 系列非再疊層而是直接重現教學;EX03 weld 走 `drawWeldBeam` 仍排 v79+ backport,本批不動。）
 
 
 

@@ -10,6 +10,39 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ---
 
+## v79 — 2026-06-03 EDT
+
+**Trigger:** continued iteration on the EX01/EX02 beam-occlusion complaint (4th–6th passes). v75/76/77 only tweaked the shadow gradient. v79 = Beam Overhaul (BO-1..BO-5). A wavefront/arc "animated beam" was prototyped and **rejected** by the user ("方向不對，不用往黃色光束方向去做") — it lived only in a throwaway proto and was never shipped. Final direction: bold beam + strong occlusion + no reflection + a clipped cyan interface highlight (user red-light authorised 2026-06-04).
+
+### New rules (CLAUDE.md §256–§260)
+
+| §   | Code | One-liner |
+|-----|------|-----------|
+| 256 | BO-1 | Bold incident cone — core gradient alpha 0.52→0.82 / 0.20→0.46 / 0.05→0.14 |
+| 257 | BO-2 | Reflection visuals REMOVED (SH5 wave + SH9 specular + reflected-ray cue) per user "不需要有東西從球體反射回來" |
+| 258 | BO-3 | Strong occlusion — `_belowFactor`/`_bloomBelow` = 1 − smoothstep(interactionBlock)×0.95 |
+| 259 | BO-4 | Declutter — near-field band / cone dashed / θ label / sound-path dashed dimmed |
+| 260 | BO-5 | Clipped interface highlight — cyan line along beam∩defect at the SDH top (EX02) |
+
+### Modified functions
+- `drawStandardBeam` — BO-1 (`_v74AlphaAt` + gradient stops), BO-3 (`_occ` smoothstep + `_belowFactor`/`_bloomBelow`), BO-4 (dim near-field band/cone edge/divider/θ label), BO-5 (clipped interface highlight at the tail; **additive only** — does not touch `beamGrad`, `interactionBlock`, or any geometry var).
+- EX01 pore loop + EX02 `_drawSdh` — removed `_drawSH5ReflectionWave` / `_drawSH9SpecularReflection` calls + EX02 reflected-ray cue (BO-2). Helper fns kept DEFINED (smoke guards).
+
+### Smoke tests
+- `ruleCodes.length === 5` + join `'BO-1,BO-2,BO-3,BO-4,BO-5'`; rule-audit §256–§260 tags present. **70 assertions pass.**
+- Existing beam guards (`_belowFactor`, `interactionBlock`, `hWBot, beamBot`) still pass.
+
+### Touched files
+- `今日工作區/ut-scanner-v79.html` (renamed from v78; BO-1..BO-5 + 3 user-visible version strings + `__VERSION_DELTA__`)
+- `今日工作區/CLAUDE.md` (§256–§260)
+- `今日工作區/CHANGELOG.md` (this entry)
+
+### Notes
+- Verified headless (puppeteer + Chrome): bold cone, strong shadow below the object, no reflection, cyan clipped highlight on the SDH top. Public share via trycloudflare quick tunnel.
+- EX03 weld (drawWeldBeam) out of scope. EX01 blue-pore interface highlight (BO-5 analog) flagged as a follow-up.
+
+---
+
 ## v77 — 2026-06-02 EDT
 
 **Trigger:** user "SH9 Physics Correction Directive (UT Energy Redistribution Model)" + "OK SH9 全採". Major paradigm pivot: beam stops being modeled as light + shadow and becomes acoustic energy that redistributes on contact (reflection / scattering / transmission / minimal residual shadow). All v75/v76 SH4/SH6/SH7 work is reverted; replaced by the SH9 family.
