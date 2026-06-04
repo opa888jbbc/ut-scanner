@@ -1057,6 +1057,7 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 
 264\. 【BO-11 · EX3 防禦性 guard + 光束不裁切】`_applyShadowOcclusion` 開頭加 `if (exercise === 'weld') return;` —— EX3 本就走 `drawWeldBeam` 不會呼叫此函式,但依使用者字面指令「在陰影函式加 EX3 強制 return」明確守衛,確保 EX3 永不繪製 beam 陰影。同時宣示:亮錐(Layer A `_renderBaseYellowBeam`)永遠在陰影之前無 clip 繪製,唯一 `ctx.clip()` 包在 save/restore 內僅作用於陰影漸層,**光束渲染路徑不被任何遮罩裁切**(對應使用者「確保渲染路徑不會被任何遮罩裁切」)。
   - **【2026-06-04 EDT 渲染管線重構 / 使用者直接指令(同 v80,不升版)】** `drawStandardBeam` dispatch 改為嚴格兩階段 + globalAlpha 護欄:Stage A 前後各 `ctx.globalAlpha = 1.0;` 強制重置,確保任何前面繪圖(如 EX04 `drawLobe` 的 `globalAlpha = intensity`)殘留的 alpha 都不會讓黃光淡掉/消失;Stage A(`_renderBaseYellowBeam`)路徑無 clip / 無 destination-out;Stage B(`_applyShadowOcclusion`)僅 EX1/EX2 疊加。對應使用者「保證黃光在 EX1/EX2 下絕對不會消失」。
+  - **【2026-06-04 EDT 光束出探頭修正 / 使用者 v70 參考圖(同 v80,不升版)】** 截圖比對找到黃光在探頭下消失的**真正根因**:`_conePath` 從 `nearFieldY`(近場底,約 30% 深)起繪 → 探頭面到近場底整段沒有黃光,該空隙被探頭接觸陰影柱(System 1 深色 `rgba(0,0,0)` 梯形)填滿,看起來像「光束從中段才冒出、探頭下方是暗的」。globalAlpha 不是主因。修正兩處:(1)`_conePath` 改為從探頭面 `beamTop` 起繪的真實 UT 光束剖面六邊形(探頭面 `topHW=max(ffHWStart+1, TX_W·0.45)` 寬 → 近場底 `ffHWStart` 收窄至自然焦點 → 底牆 `hWBot` 發散),亮度漸層改 `beamTop→beamBot`(探頭面 0.85 最亮 → 底牆 0.30);(2)EX1/EX2(resolution/penetration)的接觸陰影柱整段停用(guard 加 `exercise !== 'resolution' && !== 'penetration'`)—— 它正是遮住探頭出光的元兇,且 v70 參考圖無此柱。EX1/EX2「下方陰影」改由缺陷正下方的 Stage B occlusion(`_applyShadowOcclusion`,BO-9)提供。對應使用者「探頭出來的光束不見了 → 去修正」。
 
 
 

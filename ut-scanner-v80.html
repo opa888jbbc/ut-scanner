@@ -3591,10 +3591,16 @@ function drawScan() {
   //   in EX01 which is physically wrong. v73 picks the shallowest in-column defect and clips the
   //   column to its top edge, then fades alpha inside the defect with a smoothstep to avoid the
   //   hard-edged "cut off" look.
-  // v80 §263 BO-10 — EX3 (weld) probe contact-shadow REMOVED per user 2026-06-04 EDT: in EX3 the
-  // transducer area must show ONLY the clean yellow/cyan beam — absolutely no dark shadow column or
-  // contact glow. EX1/EX2 keep the contact shadow; their defect-occlusion shadow is strengthened (BO-9).
-  if (exercise !== 'maze' && exercise !== 'grating' && exercise !== 'weld' && typeof MAT_X === 'number' && typeof MAT_Y === 'number') {
+  // v80 §263 BO-10 — EX3 (weld) probe contact-shadow REMOVED per user 2026-06-04 EDT.
+  // v80 beam-emergence fix (2026-06-04 EDT, user v70 ref image) — ALSO disabled for EX1/EX2
+  // (resolution/penetration): this dark `rgba(0,0,0)` column started at the probe face (SURF_Y) and
+  // FILLED the near-field, hiding the beam right under the probe ("探頭出來的光束不見了"). The beam
+  // now emerges from the probe face (Stage A extends to beamTop); the below-defect occlusion shadow
+  // (Stage B) is the only beam shadow. (maze/grating/immersion early-return; weld excluded — so with
+  // resolution/penetration also excluded this block is now inert, kept for structure/clarity.)
+  if (exercise !== 'maze' && exercise !== 'grating' && exercise !== 'weld'
+      && exercise !== 'resolution' && exercise !== 'penetration'
+      && typeof MAT_X === 'number' && typeof MAT_Y === 'number') {
     var isDragging = (typeof dragging !== 'undefined' && dragging);
     var topA  = isDragging ? 0.40 : 0.30;
     var midA  = isDragging ? 0.18 : 0.12;
@@ -4406,6 +4412,10 @@ function drawStandardBeam(ctx, bColor) {
   //   shadow (full beam) until a real defect occludes. EX3 (weld→drawWeldBeam) & EX4/5/6 skip Layer B.
   var nearFieldY = beamTop + Math.min(N_px, fullD);
   var ffHWStart  = Math.min(N_px, fullD) * Math.tan(bAngle) * 0.5;
+  // v80 beam-emergence fix (2026-06-04 EDT, user v70 reference image) — the beam MUST start at the
+  // probe face (beamTop), not at nearFieldY; otherwise the near-field zone is empty and the beam
+  // looks detached from the probe. topHW = beam half-width at the probe face (≈ probe width).
+  var topHW      = Math.max(ffHWStart + 1, TX_W * 0.45);
   var _belowFactor = 1 - interactionBlock;                         // (kept name for smoke)
   var _shadowMode  = (exercise === 'resolution' || exercise === 'penetration') && hasInteraction && interactionBlock > 0.001;
 
@@ -4420,18 +4430,30 @@ function drawStandardBeam(ctx, bColor) {
 
   function _conePath(s){
     s = s || 1;
+    // Classic UT beam profile: WIDE at the probe face (topHW) so it visibly EMERGES from the probe,
+    // necks to the natural focus at the near-field end (ffHWStart), then diverges to hWBot at the
+    // back wall. (v80 2026-06-04 EDT user v70-ref fix — was a cone starting at nearFieldY = empty
+    // near-field = beam detached from probe.)
     ctx.beginPath();
-    ctx.moveTo(tx - ffHWStart*s, nearFieldY); ctx.lineTo(tx + ffHWStart*s, nearFieldY);
-    ctx.lineTo(tx + hWBot*s, beamBot);        ctx.lineTo(tx - hWBot*s, beamBot);
+    ctx.moveTo(tx - topHW*s,     beamTop);      // probe face, left
+    ctx.lineTo(tx + topHW*s,     beamTop);      // probe face, right
+    ctx.lineTo(tx + ffHWStart*s, nearFieldY);   // neck (focus), right
+    ctx.lineTo(tx + hWBot*s,     beamBot);      // back wall, right
+    ctx.lineTo(tx - hWBot*s,     beamBot);      // back wall, left
+    ctx.lineTo(tx - ffHWStart*s, nearFieldY);   // neck (focus), left
     ctx.closePath();
   }
   function _renderBaseYellowBeam(){
     // soft outer glow (beam's own colour)
     ctx.save(); ctx.shadowColor = bColor + '0.35)'; ctx.shadowBlur = 8; ctx.fillStyle = bColor + '0.10)';
     _conePath(1.12); ctx.fill(); ctx.restore();
-    // full bright cone — vertical bright gradient, NO occlusion baked in (Layer A is pure beam)
-    var g = ctx.createLinearGradient(0, nearFieldY, 0, beamBot);
-    g.addColorStop(0, bColor + '0.82)'); g.addColorStop(0.55, bColor + '0.46)'); g.addColorStop(1, bColor + '0.30)');
+    // full bright cone — vertical gradient spanning probe face → back wall, NO occlusion baked in
+    // (Layer A is pure beam). Brightest at the probe face so the beam reads as EMERGING from the probe.
+    var g = ctx.createLinearGradient(0, beamTop, 0, beamBot);
+    g.addColorStop(0,    bColor + '0.85)');   // probe face — brightest
+    g.addColorStop(0.30, bColor + '0.78)');   // near-field — still bright
+    g.addColorStop(0.65, bColor + '0.46)');
+    g.addColorStop(1,    bColor + '0.30)');   // back wall — dimmer (depth attenuation)
     ctx.fillStyle = g; _conePath(1); ctx.fill();
   }
   function _applyShadowOcclusion(){
