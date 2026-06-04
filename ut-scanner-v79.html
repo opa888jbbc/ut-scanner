@@ -2966,6 +2966,21 @@ function getPoreSignals() {
 }
 
 // ── EXERCISE 1: porosity cluster BW shadowing ─────────
+// v79 §258 BO-3 (unified 2026-06-04 EDT) — SHARED beam-occlusion model used by BOTH EX01
+// (porosity cluster) and EX02 (SDH). `block` = how strongly the object shadows the beam below it,
+// from the probe's geometric distance to the object centre, normalised by the reach at which the
+// beam edge clears the object edge (beamHalfWidth + objectHalfWidth → handles a wide pore cluster
+// AND a tiny SDH alike), then smoothstep'd → soft fade, no 0→1 jump.
+function calculateBeamOcclusion(probeX, objLeft, objRight) {
+  var bHW = beamHalfWidthPx();
+  if (bHW <= 0 || objRight <= objLeft) return 0;
+  var objCx   = (objLeft + objRight) / 2;
+  var objHalf = (objRight - objLeft) / 2;
+  var reach   = bHW + objHalf;                                  // probe dist at which the beam edge clears the object edge
+  var raw     = Math.max(0, 1 - Math.abs(probeX - objCx) / reach);
+  return raw * raw * (3 - 2 * raw);                             // smoothstep — smooth, no jump
+}
+
 // BW decays as beam covers the porosity cluster.
 // Uses the actual cluster X span (rx 0.38→0.62) not a fake line defect.
 function getLineDefSignal() {
@@ -2982,8 +2997,10 @@ function getLineDefSignal() {
   // BW: full when cluster not covered, zero when fully covered
   var freqBW = freq===5 ? 1.0 : 0.55;
   var maxBwAmp = Math.min(twoWayAtten(1.0) * freqBW * gainMult(), 2.5);
-  // BW decays linearly with cluster coverage — no residual minimum
-  var bwAmp = maxBwAmp * Math.max(0.0, 1.0 - clusterCoverage);
+  // v79 §258 BO-3 (unified) — EX01 occlusion via the SAME shared calculateBeamOcclusion() as EX02.
+  var block = calculateBeamOcclusion(txX, clusterLeft, clusterRight);
+  // BW decays with the shared block (smooth, no residual minimum) — synced with the visual shadow.
+  var bwAmp = maxBwAmp * Math.max(0.0, 1.0 - block);
   // Legacy fields for compatibility
   var defCanvasY = MAT_Y + LINE_DEF.ry * MAT_H;
   var defLeft    = clusterLeft;
@@ -2991,7 +3008,7 @@ function getLineDefSignal() {
   var overlap    = clusterCoverage;
   var hitDefect  = clusterCoverage > 0.2;
   var amp = 0; // not used for resolution exercise (individual pores drawn separately)
-  return {amp, overlap, hitDefect, bwAmp, defCanvasY, defLeft, defRight, ry:LINE_DEF.ry};
+  return {amp, overlap, block, hitDefect, bwAmp, defCanvasY, defLeft, defRight, ry:LINE_DEF.ry};
 }
 
 // ── EXERCISE 2: SDH reflectors — Frequency vs Penetration ──
@@ -3036,17 +3053,10 @@ function getPlanarSignal() {
   var maxOverlap = Math.max(shallow.overlap, ref.overlap, deep.overlap, far.overlap);
   var freqBWfactor = freq===5 ? 0.95 : 0.45;
   var maxBwAmp = Math.min(twoWayAtten(1.0) * freqBWfactor * gainMult(), 2.5);
-  // v79 §258 BO-3 smoothness fix (2026-06-04 EDT, user red-light spec) — the old normalised
-  // block (maxOverlap / _maxPossOv) saturated 0→1 over a tiny probe move (SDH is only Φ3mm), so
-  // the shadow / BW snapped on abruptly. Drive block from the probe's geometric distance to the
-  // active SDH centre across the WHOLE beam width, then smoothstep → smooth fade, no sudden jump.
-  // The SAME `block` feeds bwAmp here AND drawStandardBeam's interactionBlock → in sync.
-  var _bHW2 = beamHalfWidthPx();
+  // v79 §258 BO-3 (unified 2026-06-04 EDT) — EX02 occlusion via the SHARED calculateBeamOcclusion()
+  // (the same function EX01 uses). Boundary-aware: reach = beamHalfWidth + SDH half-width, smoothstep'd.
   var activeSdh = [shallow, ref, deep, far].reduce(function(a, b){ return a.overlap > b.overlap ? a : b; });
-  var sdhCx = (activeSdh.defLeft + activeSdh.defRight) / 2;
-  var dist = Math.abs(txX - sdhCx);
-  var rawBlock = (_bHW2 > 0 && activeSdh.overlap > 0) ? Math.max(0, 1 - (dist / _bHW2)) : 0;
-  var block = rawBlock * rawBlock * (3 - 2 * rawBlock);
+  var block = (activeSdh.overlap > 0) ? calculateBeamOcclusion(txX, activeSdh.defLeft, activeSdh.defRight) : 0;
   var bwAmp = maxBwAmp * (1.0 - block);
   return {
     defAmp:     Math.max(shallow.defAmp, ref.defAmp, deep.defAmp, far.defAmp),
@@ -4371,7 +4381,7 @@ function drawStandardBeam(ctx, bColor) {
       }
     }
     if (bestAmp > 0.05) hasInteraction = true;
-    interactionBlock = getLineDefSignal().overlap;       // EX01 — porosity cluster coverage 0..1
+    interactionBlock = getLineDefSignal().block;         // EX01 — unified calculateBeamOcclusion (same as EX02)
   }
   // Cone geometry — UNCHANGED from v74: full half-width at beamBot, full far-field cone.
   var cutFrac = 1.0;
