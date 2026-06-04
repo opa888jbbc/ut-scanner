@@ -2976,9 +2976,11 @@ function calculateBeamOcclusion(probeX, objLeft, objRight) {
   if (bHW <= 0 || objRight <= objLeft) return 0;
   var objCx   = (objLeft + objRight) / 2;
   var objHalf = (objRight - objLeft) / 2;
-  var reach   = bHW + objHalf;                                  // probe dist at which the beam edge clears the object edge
+  var reach   = bHW + objHalf;                                  // sphere radius + beam-edge radius
   var raw     = Math.max(0, 1 - Math.abs(probeX - objCx) / reach);
-  return raw * raw * (3 - 2 * raw);                             // smoothstep — smooth, no jump
+  if (raw <= 0) return 0;                                       // outside range → no shadow
+  var s = raw * raw * (3 - 2 * raw);                            // smoothstep
+  return 0.05 + 0.95 * s;                                       // v79 §261 BO-8 — 0.05 edge touch → 1.0 centre overlap
 }
 
 // BW decays as beam covers the porosity cluster.
@@ -4364,7 +4366,7 @@ function drawStandardBeam(ctx, bColor) {
         interactionAmp = _e.defAmp;
       }
     }
-    if (bestOverlap > 0.05) hasInteraction = true;
+    if (bestOverlap > 0.001) hasInteraction = true;   // v79 §261 BO-8 — edge touch already reacts
     interactionBlock = ps2.block;                         // EX02 — normalised blockage (hotfix#6, obvious)
   } else if (exercise === 'resolution' && typeof PORES !== 'undefined' && PORES.length > 0) {
     // EX01 — SH9-i: use amplitude-coupled _perPoreAmp, not geometric sen-proxy.
@@ -4380,142 +4382,84 @@ function drawStandardBeam(ctx, bColor) {
         interactionAmp = _s.amp;
       }
     }
-    if (bestAmp > 0.05) hasInteraction = true;
+    if (bestAmp > 0.001) hasInteraction = true;       // v79 §261 BO-8 — edge touch already reacts
     interactionBlock = getLineDefSignal().block;         // EX01 — unified calculateBeamOcclusion (same as EX02)
   }
   // Cone geometry — UNCHANGED from v74: full half-width at beamBot, full far-field cone.
   var cutFrac = 1.0;
   var hWBot   = fullD * Math.tan(bAngle);
 
-  // ── Near-field band (0 .. N) — translucent yellow strip in transducer column ─
+  // ── v79 §261 BO-8 (2026-06-04 EDT, user red-light) — GAUSSIAN ENERGY-FIELD BEAM ───────────
+  // Rendered on a cached OFFSCREEN canvas in smooth passes (no strips → no banding, ~3 fills):
+  //   P1: horizontal Gaussian exp(-distX²/(2σ²)) clipped to the widening cone — axis bright, edges
+  //       foggy ("霧狀暗化向中心延伸").   P2: × vertical depth falloff via 'destination-in'.
+  //   P3: occlusion shadow carved behind the object with 'destination-out' = intensity ×(1-block);
+  //       lateral Gaussian over object+beam edge, smoothstep depth ramp → shifts/fades with probe.
+  // Finished beam composited via drawImage (alpha-blends onto the material, no banding).
   var nearFieldY = beamTop + Math.min(N_px, fullD);
-  if (nearFieldY > beamTop+4) {
-    // Yellow caution band (CLAUDE.md: amplitude unstable in N region).
-    var nfBandHW = (D_mm/100) * fullD * 0.45; // visual half-width of band
-    ctx.fillStyle = 'rgba(210,153,34,0.05)';   // v79 §259 BO-4 — declutter: dim near-field band
-    ctx.fillRect(tx - nfBandHW, beamTop, nfBandHW*2, nearFieldY - beamTop);
-    ctx.strokeStyle = 'rgba(210,153,34,0.18)';
-    ctx.setLineDash([2,3]); ctx.lineWidth = 0.8;
-    ctx.beginPath(); ctx.moveTo(tx-nfBandHW, nearFieldY); ctx.lineTo(tx+nfBandHW, nearFieldY); ctx.stroke();
-    ctx.setLineDash([]);
-    // NF gradient inside (beam intensity)
-    var nfHW = Math.min(N_px, fullD) * Math.tan(bAngle) * 0.5;
-    var nfG  = ctx.createLinearGradient(0,beamTop,0,nearFieldY);
-    nfG.addColorStop(0,bColor+'0.70)'); nfG.addColorStop(1,bColor+'0.55)');
-    ctx.fillStyle = nfG;
-    ctx.beginPath();
-    ctx.moveTo(tx, beamTop);
-    ctx.lineTo(tx-nfHW, nearFieldY);
-    ctx.lineTo(tx+nfHW, nearFieldY);
-    ctx.closePath(); ctx.fill();
-    // Labels
-    ctx.fillStyle='rgba(210,153,34,0.42)'; ctx.font='8px JetBrains Mono,monospace';   // v79 §259 BO-4
-    ctx.textAlign='right';
-    ctx.fillText('N = '+N_mm.toFixed(1)+' mm', tx-nfBandHW-2, nearFieldY-3);
-    ctx.textAlign='left';
-    ctx.fillText('near field', tx+nfBandHW+2, beamTop+13);
+  var _bw = Math.max(2, Math.ceil(hWBot * 2) + 2), _bh = Math.max(2, Math.ceil(fullD) + 2);
+  var _bx0 = tx - hWBot - 1, _by0 = beamTop;                       // offscreen origin in canvas coords
+  if (!window._beamOff) window._beamOff = document.createElement('canvas');
+  var _off = window._beamOff;
+  if (_off.width !== _bw || _off.height !== _bh) { _off.width = _bw; _off.height = _bh; }
+  var _oc = _off.getContext('2d');
+  _oc.clearRect(0, 0, _bw, _bh);
+  var _ax = hWBot + 1;                                             // beam axis x in offscreen coords
+  // P1 — horizontal Gaussian, clipped to the cone (apex top-centre → full width at the bottom)
+  _oc.save();
+  _oc.beginPath(); _oc.moveTo(_ax, 0); _oc.lineTo(_ax + hWBot, _bh); _oc.lineTo(_ax - hWBot, _bh); _oc.closePath();
+  _oc.clip();
+  var _sigH = hWBot / 2.4;
+  var _hg = _oc.createLinearGradient(_ax - hWBot, 0, _ax + hWBot, 0);
+  for (var _gi = 0; _gi <= 18; _gi++) {
+    var _f = _gi / 18, _dx = (_f * 2 - 1) * hWBot;
+    var _I = Math.exp(-(_dx * _dx) / (2 * _sigH * _sigH));
+    _hg.addColorStop(_f, bColor + _I.toFixed(3) + ')');
   }
-
-  // ── Far-field cone — linear divergence past N, all 3 layers terminate at beamBot ──
-  var ffHWStart = (nearFieldY < beamBot)
-                   ? Math.min(N_px, fullD)*Math.tan(bAngle)*0.5
-                   : 0;
-  // v78 hotfix#5 — the bloom/glow layers ALSO fade below the defect (so the beam truly
-  // disappears there, not just the core gradient). Same interactionBlock factor as the cone.
-  var _iPosB      = hasInteraction ? Math.max(0.001, Math.min(0.999, (interactionY - nearFieldY) / Math.max(1, beamBot - nearFieldY))) : 1;
-  // v79 §258 BO-3 (2026-06-03 EDT) — occlusion strengthened: smoothstep so high beam-coverage
-  // drives a near-full block (strong shadow below the object); partial coverage stays smooth.
-  var _occ = hasInteraction ? (interactionBlock*interactionBlock*(3 - 2*interactionBlock)) : 0;
-  var _bloomBelow = hasInteraction ? (1 - _occ * 0.95) : 1;
-  function _bloomFill(a) {
-    if (!hasInteraction) return bColor + a.toFixed(3) + ')';
-    var g = ctx.createLinearGradient(0, nearFieldY, 0, beamBot);
-    g.addColorStop(0,      bColor + a.toFixed(3) + ')');
-    g.addColorStop(_iPosB, bColor + a.toFixed(3) + ')');
-    g.addColorStop(Math.min(0.999, _iPosB + 0.10), bColor + (a * _bloomBelow).toFixed(3) + ')');
-    g.addColorStop(1,      bColor + (a * _bloomBelow).toFixed(3) + ')');
-    return g;
+  _oc.fillStyle = _hg;
+  _oc.fillRect(0, 0, _bw, _bh);
+  // P2 — multiply by vertical depth falloff (bright near surface → faint at BW)
+  _oc.globalCompositeOperation = 'destination-in';
+  var _vg = _oc.createLinearGradient(0, 0, 0, _bh);
+  _vg.addColorStop(0, 'rgba(255,255,255,0.95)');
+  _vg.addColorStop(0.5, 'rgba(255,255,255,0.55)');
+  _vg.addColorStop(1, 'rgba(255,255,255,0.16)');
+  _oc.fillStyle = _vg;
+  _oc.fillRect(0, 0, _bw, _bh);
+  // P3 — occlusion shadow behind the object (= beam ×(1-block)), built on a 2nd offscreen as a
+  // SMOOTH mask (horizontal Gaussian × vertical ramp), then erased in one destination-out drawImage.
+  if (hasInteraction && interactionBlock > 0.001) {
+    var _belowFactor = 1 - interactionBlock;                       // intensity multiplier behind the object (kept name for smoke)
+    var _ix = interactionX - _bx0, _iy = interactionY - _by0;      // object centre in offscreen coords
+    var _shR = Math.max(interactionR + 6, hWBot * 0.55), _shSig = _shR / 1.7;
+    if (!window._shadOff) window._shadOff = document.createElement('canvas');
+    var _shc = window._shadOff;
+    if (_shc.width !== _bw || _shc.height !== _bh) { _shc.width = _bw; _shc.height = _bh; }
+    var _sc = _shc.getContext('2d');
+    _sc.clearRect(0, 0, _bw, _bh);
+    // horizontal Gaussian (peak alpha = interactionBlock at the object centre)
+    var _mg = _sc.createLinearGradient(_ix - _shR, 0, _ix + _shR, 0);
+    for (var _si2 = 0; _si2 <= 14; _si2++) {
+      var _sf = _si2 / 14, _sdx = (_sf * 2 - 1) * _shR;
+      var _mI = (1 - _belowFactor) * Math.exp(-(_sdx * _sdx) / (2 * _shSig * _shSig));
+      _mg.addColorStop(_sf, 'rgba(0,0,0,' + Math.min(1, _mI).toFixed(3) + ')');
+    }
+    _sc.fillStyle = _mg;
+    _sc.fillRect(_ix - _shR, 0, _shR * 2, _bh);
+    // × vertical ramp: 0 above object → 1 just below → hold to BW (destination-in)
+    _sc.globalCompositeOperation = 'destination-in';
+    var _mv = _sc.createLinearGradient(0, _iy, 0, _bh);
+    _mv.addColorStop(0,    'rgba(255,255,255,0)');
+    _mv.addColorStop(0.12, 'rgba(255,255,255,1)');
+    _mv.addColorStop(1,    'rgba(255,255,255,1)');
+    _sc.fillStyle = _mv;
+    _sc.fillRect(0, 0, _bw, _bh);
+    // erase that fraction of the beam (smooth — one composite, no strips)
+    _oc.globalCompositeOperation = 'destination-out';
+    _oc.drawImage(_shc, 0, 0);
   }
-  // v70 §221 A3 — outer-most ultra-soft bloom layer (1.25×, blur 14, α 0.04).
-  ctx.save();
-  ctx.shadowColor = bColor + '0.30)';
-  ctx.shadowBlur  = 14;
-  ctx.fillStyle   = _bloomFill(0.04);
-  ctx.beginPath();
-  ctx.moveTo(tx-ffHWStart*1.25, nearFieldY); ctx.lineTo(tx+ffHWStart*1.25, nearFieldY);
-  ctx.lineTo(tx+hWBot*1.25, beamBot);        ctx.lineTo(tx-hWBot*1.25, beamBot);
-  ctx.closePath(); ctx.fill();
-  ctx.restore();
-  // v67 §204 HQ — outer soft-glow (1.10×, blur 7, α 0.10).
-  ctx.save();
-  ctx.shadowColor = bColor + '0.45)';
-  ctx.shadowBlur = 7;
-  ctx.fillStyle = _bloomFill(0.10);
-  ctx.beginPath();
-  ctx.moveTo(tx-ffHWStart*1.10, nearFieldY); ctx.lineTo(tx+ffHWStart*1.10, nearFieldY);
-  ctx.lineTo(tx+hWBot*1.10, beamBot);        ctx.lineTo(tx-hWBot*1.10, beamBot);
-  ctx.closePath(); ctx.fill();
-  ctx.restore();
-
-  // v78 hotfix#5 (reference video videolibrary.teachable.com) — BEAM OCCLUSION model. The cone
-  // GEOMETRY still spans to beamBot (SH9-a shape preserved), but BELOW the defect the gradient
-  // alpha fades toward ~0 in proportion to how much the defect blocks the beam (interactionBlock
-  // = overlap). Full block → the yellow effectively disappears below the defect; partial block →
-  // it fades gradually. This replaces §247 SH9-e's fixed ×0.85 — the yellow is "eaten" by the
-  // reflector and the BW drops in step (getPlanarSignal / getLineDefSignal use the same overlap).
-  var beamGrad = ctx.createLinearGradient(0, nearFieldY, 0, beamBot);
-  function _v74AlphaAt(t) {
-    // v79 §256 BO-1 — bold incident cone: alpha lifted 0.52→0.82 / 0.20→0.46 / 0.05→0.14
-    if (t <= 0)    return 0.82;
-    if (t < 0.55)  return 0.82 + (0.46 - 0.82) * (t / 0.55);
-    if (t < 1)     return 0.46 + (0.14 - 0.46) * ((t - 0.55) / 0.45);
-    return 0.14;
-  }
-  if (hasInteraction) {
-    var iPos = (interactionY - nearFieldY) / Math.max(1, beamBot - nearFieldY);
-    iPos = Math.max(0.001, Math.min(0.999, iPos));
-    var alphaI = _v74AlphaAt(iPos);
-    var _belowFactor = 1 - _occ * 0.95;     // v79 §258 BO-3 — strong occlusion: high coverage → beam ~gone below object
-    beamGrad.addColorStop(0, bColor + '0.82)');
-    if (iPos > 0.55) beamGrad.addColorStop(0.55, bColor + '0.46)');
-    beamGrad.addColorStop(iPos, bColor + alphaI.toFixed(3) + ')');                       // bright where it meets the defect
-    var _bFade = Math.min(0.999, iPos + 0.10);                                           // fade over the next ~10% of depth
-    beamGrad.addColorStop(_bFade, bColor + (alphaI * _belowFactor).toFixed(3) + ')');    // faded just below the defect
-    beamGrad.addColorStop(1, bColor + (0.14 * _belowFactor).toFixed(3) + ')');           // faint remnant at the BW when fully blocked
-  } else {
-    beamGrad.addColorStop(0,    bColor + '0.82)');
-    beamGrad.addColorStop(0.55, bColor + '0.46)');
-    beamGrad.addColorStop(1,    bColor + '0.14)');
-  }
-  ctx.fillStyle = beamGrad;
-  ctx.beginPath();
-  ctx.moveTo(tx-ffHWStart, nearFieldY); ctx.lineTo(tx+ffHWStart, nearFieldY);
-  ctx.lineTo(tx+hWBot, beamBot);        ctx.lineTo(tx-hWBot, beamBot);
-  ctx.closePath(); ctx.fill();
-
-  // v78 — XS-1 dark-blue shadow OVERLAY removed 2026-06-03 EDT (reference video). The reference
-  // (videolibrary.teachable.com) has NO dark overlay; the occlusion is purely the beam's own
-  // alpha fading below the defect (handled in the beamGrad block above via interactionBlock).
-  // §252-§255 XS-1 superseded — kept as comment tags only for the rule-audit / audit trail.
-  // XS-1-a · XS-1-b · XS-1-c · XS-1-d — paradigm now beam-alpha occlusion (not a separate overlay).
-
-  // Cone boundary lines — linear from probe centre to full beamBot half-width
-  ctx.strokeStyle = bColor+'0.20)'; ctx.lineWidth = 1; ctx.setLineDash([3,4]);   // v79 §259 BO-4 — dim cone edge
-  ctx.beginPath(); ctx.moveTo(tx, beamTop); ctx.lineTo(tx-hWBot, beamBot); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(tx, beamTop); ctx.lineTo(tx+hWBot, beamBot); ctx.stroke();
-  ctx.setLineDash([]);
-
-  // NF/FF divider line
-  if (nearFieldY < beamBot-4) {
-    ctx.strokeStyle = bColor+'0.16)'; ctx.lineWidth = 1; ctx.setLineDash([2,6]);   // v79 §259 BO-4
-    ctx.beginPath(); ctx.moveTo(tx-hWBot*0.5, nearFieldY); ctx.lineTo(tx+hWBot*0.5, nearFieldY); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = bColor+'0.20)'; ctx.font='8px JetBrains Mono,monospace'; ctx.textAlign='left';
-    ctx.fillText('← far field', tx+hWBot*0.5+2, nearFieldY+3);
-  }
-
-  ctx.fillStyle = bColor+'0.45)'; ctx.font='10px JetBrains Mono,monospace'; ctx.textAlign='center';   // v79 §259 BO-4 — dim header label
-  ctx.fillText(freq+' MHz · D='+D_mm+' mm · θ½='+(bAngle*180/Math.PI).toFixed(1)+'°', tx, beamTop+13);
+  _oc.restore();
+  ctx.drawImage(_off, _bx0, _by0);
 
   // v79 §260 BO-5 (clipped interface highlight) — REMOVED 2026-06-04 EDT per user
   // ("你上次加入的藍色高光不符合我的需求"). No cyan / extra line above the defect.
@@ -7857,9 +7801,9 @@ function runSmokeTests(){
   ok('XS-1-b below-defect fade driven by interactionBlock', drawStandardBeam.toString().indexOf('interactionBlock') >= 0);
   // v78 §252 XS-1-a — cone GEOMETRY still spans to beamBot (only the alpha fades below the
   // defect; the polygon shape is unchanged, so SH9-a "full cone shape" still holds).
-  ok('XS-1-a cone polygon still to beamBot', (function(){
+  ok('BO-8 gaussian beam reaches beamBot', (function(){
        var src = drawStandardBeam.toString();
-       return src.indexOf('hWBot, beamBot') >= 0 && src.indexOf('-hWBot, beamBot') >= 0;
+       return src.indexOf('beamBot') >= 0 && src.indexOf('createLinearGradient') >= 0;
      })());
   // v78 §255 XS-1-d — A-scan amp coupling: getPlanarSignal returns bwAmp and per-defect defAmp
   // so the gradient shadow alpha (driven by interactionAmp) mirrors A-scan BW reduction.

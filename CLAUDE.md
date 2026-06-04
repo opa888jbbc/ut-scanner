@@ -1035,6 +1035,13 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
   - **硬性限制(使用者要求)**:純疊加 overlay,**絕不更改/破壞** `beamGrad`(黃光漸層)、`interactionBlock`(陰影遮蔽)或任何既有幾何變數。
   - EX01 pore(藍球)同概念可比照加,但本批先依使用者精準 spec 落 EX02;EX01 視回饋再補。
 
+261\. 【BO-8 · 高斯能量場光束(Gaussian Energy-Field Beam)—— 2026-06-04 EDT 使用者紅燈】完全復刻影片物理光束:`drawStandardBeam` 改用**像素級高斯強度場**取代單一透明度漸層。
+  - **光束渲染**:光束 = 一疊水平 strips,每條橫向強度 `peak(y)·exp(−distX²/(2σ²))`(軸心最亮、邊緣霧化向中心延伸),`σ ∝ 該深度光束半寬`(近場窄 → 遠場發散),`peak` 隨深度遞減。不再用單一 alpha。
+  - **遮蔽 = 乘法非 if**:光束畫完後用 `ctx.globalCompositeOperation='destination-out'` 在**球體正後方**挖陰影,強度 = `interactionBlock`、橫向高斯寬 = `球半徑 + 聲束邊緣`、深度 smoothstep 淡入 → 等同把該區強度 ×`(1−block)`;陰影寬度/強度隨探頭平滑漸變漸消(`陰影區域寬度隨探頭位移`)。**無任何硬 if 斷裂**。
+  - **邊緣映射**:`calculateBeamOcclusion` 範圍內 `block` 由 `0.05(邊緣輕觸)→1.0(中心重疊)`(`reach = 球半徑 + 聲束邊緣半徑`);hasInteraction 閾值降到 ~0 讓邊緣輕觸即有「微量暗化」。
+  - **一致 + 清場**:EX1 與 EX2 共用同一高斯場 + 同一 `calculateBeamOcclusion`。移除舊 `beamGrad`/bloom/近場帶/錐邊虛線/θ 標籤/NF-FF divider → 畫面**只剩黃色光束 + 球體造成的陰影**;藍線/藍光暈嘗試碼全清。沿用 smoothstep(非 `pow(1.5)`)。
+  - smoke:`drawStandardBeam.toString()` 仍含 `interactionBlock` + `_belowFactor` + `beamBot` + `createLinearGradient`;不含 `fadeEndY`/`hWFadeEnd`。ruleCodes 不變(BO-1..BO-4),版本維持 v79(使用者「不用更新版本」)。
+
 （備註:§252-255 XS-1 dark-overlay 疊層範式已於 v78 撤,BO 系列非再疊層而是直接重現教學;EX03 weld 走 `drawWeldBeam` 仍排 v79+ backport,本批不動。）
 
 
