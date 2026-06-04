@@ -12,6 +12,8 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ## v79 — 2026-06-03 EDT
 
+**Hotfix 2026-06-04 EDT (user red-light):** (1) **BO-5 removed** — the clipped cyan interface highlight ("藍色高光不符合我的需求"); no cyan/extra line above the defect. (2) **`getPlanarSignal().block` rewritten** from `maxOverlap / _maxPossOv` (jumped 0→1 over a tiny probe move on a Φ3mm SDH → shadow/BW snapped on) to a **geometric distance + smoothstep** model: `block = smoothstep(max(0, 1 − dist/beamHalfWidthPx()))`, `dist = |txX − active-SDH centre|`. Occlusion now fades smoothly across the whole beam width (verified sweep: block 1.0 → 0.78 → 0.35 → 0.03 → 0; bwAmp rises in step). ruleCodes back to `BO-1..BO-4`; smoke 69/69.
+
 **Trigger:** continued iteration on the EX01/EX02 beam-occlusion complaint (4th–6th passes). v75/76/77 only tweaked the shadow gradient. v79 = Beam Overhaul (BO-1..BO-5). A wavefront/arc "animated beam" was prototyped and **rejected** by the user ("方向不對，不用往黃色光束方向去做") — it lived only in a throwaway proto and was never shipped. Final direction: bold beam + strong occlusion + no reflection + a clipped cyan interface highlight (user red-light authorised 2026-06-04).
 
 ### New rules (CLAUDE.md §256–§260)

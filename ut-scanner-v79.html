@@ -3036,15 +3036,17 @@ function getPlanarSignal() {
   var maxOverlap = Math.max(shallow.overlap, ref.overlap, deep.overlap, far.overlap);
   var freqBWfactor = freq===5 ? 0.95 : 0.45;
   var maxBwAmp = Math.min(twoWayAtten(1.0) * freqBWfactor * gainMult(), 2.5);
-  // v78 hotfix#6 — EX02 obviousness fix. The raw geometric overlap of a Φ3mm SDH vs the wide
-  // beam maxes out at only ~0.075, so the old `maxOverlap × factor` barely moved the BW. Use a
-  // NORMALISED block instead: block = maxOverlap / (overlap-when-fully-centred) → reaches 1.0
-  // when the beam sits squarely on an SDH, so the BW drops to ~0 (obvious, per CLAUDE.md §1).
-  // The SAME `block` drives the beam-occlusion fade in drawStandardBeam (ps2.block) → in sync.
-  var _bHW2      = beamHalfWidthPx();
-  var _sdhHalfPx = 0.012 * MAT_W;                 // Φ3mm SDH half-width (matches _signalForSdh)
-  var _maxPossOv = (_bHW2 > 0) ? Math.min(1, _sdhHalfPx / _bHW2) : 1;
-  var block      = (_maxPossOv > 0) ? Math.max(0, Math.min(1, maxOverlap / _maxPossOv)) : 0;
+  // v79 §258 BO-3 smoothness fix (2026-06-04 EDT, user red-light spec) — the old normalised
+  // block (maxOverlap / _maxPossOv) saturated 0→1 over a tiny probe move (SDH is only Φ3mm), so
+  // the shadow / BW snapped on abruptly. Drive block from the probe's geometric distance to the
+  // active SDH centre across the WHOLE beam width, then smoothstep → smooth fade, no sudden jump.
+  // The SAME `block` feeds bwAmp here AND drawStandardBeam's interactionBlock → in sync.
+  var _bHW2 = beamHalfWidthPx();
+  var activeSdh = [shallow, ref, deep, far].reduce(function(a, b){ return a.overlap > b.overlap ? a : b; });
+  var sdhCx = (activeSdh.defLeft + activeSdh.defRight) / 2;
+  var dist = Math.abs(txX - sdhCx);
+  var rawBlock = (_bHW2 > 0 && activeSdh.overlap > 0) ? Math.max(0, 1 - (dist / _bHW2)) : 0;
+  var block = rawBlock * rawBlock * (3 - 2 * rawBlock);
   var bwAmp = maxBwAmp * (1.0 - block);
   return {
     defAmp:     Math.max(shallow.defAmp, ref.defAmp, deep.defAmp, far.defAmp),
@@ -4505,44 +4507,8 @@ function drawStandardBeam(ctx, bColor) {
   ctx.fillStyle = bColor+'0.45)'; ctx.font='10px JetBrains Mono,monospace'; ctx.textAlign='center';   // v79 §259 BO-4 — dim header label
   ctx.fillText(freq+' MHz · D='+D_mm+' mm · θ½='+(bAngle*180/Math.PI).toFixed(1)+'°', tx, beamTop+13);
 
-  // ── v79 §260 BO-5 — dynamic clipped interface highlight ───────────────────────
-  // When the beam hits a horizontal reflector (EX02 SDH), draw a precisely-clipped cyan line
-  // along the TOP of the defect where the beam ACTUALLY overlaps it — the ultrasonic energy
-  // meeting the interface. The segment is the intersection of the beam's horizontal span at
-  // that depth and the defect's own width, so it shrinks/fades smoothly as the beam edge slides
-  // past the defect edge ("慢慢漸漸消失"). Purely additive overlay — does NOT touch beamGrad, the
-  // occlusion (interactionBlock) or any existing geometry variable.
-  if (ps2 && hasInteraction) {
-    // the SDH the beam is actually on = max-overlap one (matches interactionY; avoids deep-only bounds)
-    var _hitDef = null, _hitOv = 0, _sdhArr = [ps2.shallow, ps2.ref, ps2.deep, ps2.far];
-    for (var _hi = 0; _hi < _sdhArr.length; _hi++) {
-      if (_sdhArr[_hi] && _sdhArr[_hi].overlap > _hitOv) { _hitOv = _sdhArr[_hi].overlap; _hitDef = _sdhArr[_hi]; }
-    }
-    if (_hitDef) {
-      // beam half-width at the defect depth: near-field constant, then linear divergence
-      var _nfHalf = (D_mm / 100) * fullD * 0.5;
-      var _hwAtY  = (interactionY <= nearFieldY) ? _nfHalf
-                                                 : (_nfHalf + (interactionY - nearFieldY) * Math.tan(bAngle));
-      var _beamL = tx - _hwAtY, _beamR = tx + _hwAtY;
-      var _isL = Math.max(_hitDef.defLeft, _beamL);   // inner-left  = rightmost of the two left edges
-      var _isR = Math.min(_hitDef.defRight, _beamR);  // inner-right = leftmost  of the two right edges
-      if (_isR > _isL) {
-        var _hlA = Math.min(0.95, (typeof alphaI === 'number' ? alphaI : 0.5));   // bound to beam intensity at this depth
-        ctx.save();
-        ctx.strokeStyle = 'rgba(0,229,255,' + _hlA.toFixed(3) + ')';
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        ctx.shadowColor = 'rgba(0,229,255,0.9)';
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.moveTo(_isL, interactionY);
-        ctx.lineTo(_isR, interactionY);
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        ctx.restore();
-      }
-    }
-  }
+  // v79 §260 BO-5 (clipped interface highlight) — REMOVED 2026-06-04 EDT per user
+  // ("你上次加入的藍色高光不符合我的需求"). No cyan / extra line above the defect.
 
   // v67 §204 HQ — (b) soft white halo around the transducer while dragging, so the active
   // probe reads as "live" without a colour change. Painted last = on top of everything.
@@ -7785,9 +7751,9 @@ var __VERSION_DELTA__ = Object.freeze({
   //   §257 BO-2 — Bold cyan reflection: EX02 _drawSdh normalised `hit` drives reflection + glow
   //   §258 BO-3 — Visible smooth shadow: _belowFactor/_bloomBelow ×0.97 → ×0.75 (full block→0.25)
   //   §259 BO-4 — Declutter: near-field band / cone dashed / θ label / sound-path dashed dimmed
-  //   §260 BO-5 — Clipped interface highlight: cyan line along beam∩defect at the SDH (EX02)
+  // (BO-5 clipped interface highlight removed 2026-06-04 EDT per user — back to BO-1..BO-4.)
   // Scope: EX01 5 pores + EX02 4 SDHs (drawStandardBeam path). EX03 weld backport queued v79+.
-  ruleCodes: ['BO-1','BO-2','BO-3','BO-4','BO-5']
+  ruleCodes: ['BO-1','BO-2','BO-3','BO-4']
 });
 // v66 §196 GQ — the rule-code audit serialises the whole document (innerHTML) and regex-tests
 // each code. The HTML never changes after load, so cache the result and skip the expensive
@@ -7849,8 +7815,8 @@ function runSmokeTests(){
   ok('__VERSION_DELTA__ frozen', Object.isFrozen(__VERSION_DELTA__));
   // v66 §200 GU — the hand-maintained ruleCodes list must match the count of rules adopted
   // for this ship. v78 adopts 4 XS-1 rules; update this expected count per ship.
-  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 5, __VERSION_DELTA__.ruleCodes.length);
-  ok('v79 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'BO-1,BO-2,BO-3,BO-4,BO-5');
+  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 4, __VERSION_DELTA__.ruleCodes.length);
+  ok('v79 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'BO-1,BO-2,BO-3,BO-4');
   // v77 §244 SH9-b — generic getReflectionPath helper present.
   ok('SH9-b getReflectionPath fn',     typeof getReflectionPath === 'function');
   ok('SH9-b reflection helper fn',     typeof _drawSH9SpecularReflection === 'function');

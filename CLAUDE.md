@@ -1021,10 +1021,11 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 257\. 【BO-2 · ~~缺陷反射做明顯~~ → 反射全撤(2026-06-03 EDT 使用者明示「不需要有東西從球體反射回來,只要遮蔽」)】**唯一要的效果是遮蔽,不要任何反射視覺。** 撤除:EX01 pore 的 `_drawSH5ReflectionWave`、EX02 SDH 的 `_drawSH5ReflectionWave` + `_drawSH9SpecularReflection`(指向 probe 的回波封包)、EX02「reflected-ray cue」(缺陷往上到 probe 的虛線+箭頭)。三個 helper 函式定義**保留**(smoke guard),僅不再呼叫。SDH/pore 物體本身照常畫(目標需可見)。原 §240 SH5 / §244 SH9-b / §245 SH9-c 的 standard-beam 反射視覺於此一併作廢。教訓:使用者只要「黃光照到東西被擋住」,不要再自作主張加反射/散射/cue。
 
 258\. 【BO-3 · 遮蔽(occlusion)做強 —— 這才是唯一要的效果】使用者要的是「黃色聲波照到東西 → 被遮蔽 → 後方變暗(陰影)」。v79 初版用 ×0.75(全擋殘 0.31)被打回「還是很明顯穿透」。改用 **smoothstep 強遮蔽**:`_occ = smoothstep(interactionBlock)`(高覆蓋→趨近 1)、`_belowFactor = _bloomBelow = 1 − _occ×0.95`。EX01 cluster overlap≈0.92 → _occ≈0.98 → 殘 ~0.07,對比上方 0.82 亮錐 ≈ 11:1 = 黃光在球體後方近乎消失 = 明確遮蔽;部分覆蓋時 smoothstep 平滑(§1 嚴禁突兀切換)。配合 BO-1 粗亮錐,上亮下暗一眼可見。**不加深藍 overlay**(§253 已證偽);遮蔽 = 黃光本身被擋掉,非另疊暗色。
+  - **【2026-06-04 EDT 平滑修正 / 使用者紅燈 spec】** `getPlanarSignal` 的 `block` 原用 `maxOverlap / _maxPossOv`,因 SDH 太小(Φ3mm)會在探頭微移間 **0→1 瞬跳**(陰影/BW 突然出現消失,「突變 Bug」)。改為**幾何距離式**:`activeSdh = {shallow/ref/deep/far} overlap 最大者;dist = |txX − sdhCx|;rawBlock = max(0, 1 − dist/beamHalfWidthPx());block = smoothstep(rawBlock)`。阻擋率在**整個聲束寬度內**平滑變化 → 探頭滑過缺陷時陰影柔和淡入淡出,消除突變(仍遵 §1 嚴禁突兀)。
 
 259\. 【BO-4 · 聲束區清場(Declutter)】影片背景乾淨、聲束是主角;v78 聲束被近場帶 / 錐邊虛線 / θ 標籤 / sound-path 虛線蓋住。BO-4 淡化(不刪)這些:近場帶 fill 0.10→0.05、stroke 0.35→0.18、label 0.78→0.42;錐邊虛線 0.45→0.20;NF/FF divider 0.30→0.16 + far-field label 0.35→0.20;θ 標籤 0.85→0.45;EX02 sound-path 虛線 0.32→0.16 + mm label 0.65→0.38。
 
-260\. 【BO-5 · 動態裁切界面高光線(Clipped Interface Highlight)—— 使用者 2026-06-04 EDT 紅燈授權】光束打到水平缺陷(EX02 SDH)時,在缺陷頂面沿「光束與缺陷**實際重疊**的區段」畫一條青色高光線,模擬超音波到達界面;**取代** v79 一度嘗試的黃光波前/弧線動畫(使用者明示「方向不對,不用往黃色光束方向去做」)。
+260\. 【BO-5 · 動態裁切界面高光線】❌ **2026-06-04 EDT 撤除**(使用者:「你上次加入的藍色高光不符合我的需求」)—— `drawStandardBeam` 尾端 BO-5 block 徹底刪除,缺陷上方不畫任何藍色/額外線條;__VERSION_DELTA__ ruleCodes 退回 BO-1..BO-4。下列原 spec 僅存 audit trail:
   - **位置**:`drawStandardBeam` 尾端(beamGrad + 外框線之後),僅當 `ps2 && hasInteraction`(EX02 確實打到缺陷)。
   - **幾何**:`hwAtY` = 近場半寬 `(D_mm/100)·fullD·0.5`;若 `interactionY > nearFieldY` 再加發散量 `(interactionY − nearFieldY)·tan(bAngle)`。`beamL/R = txX ∓ hwAtY`。交集 `isL = Math.max(命中SDH.defLeft, beamL)`、`isR = Math.min(命中SDH.defRight, beamR)`;`isR > isL` 才畫。
   - **命中 SDH** = `ps2.{shallow/ref/deep/far}` 中 overlap 最大者(對齊 `interactionY`,避免用到固定的 deep 邊界)。
