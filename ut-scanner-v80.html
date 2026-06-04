@@ -4412,10 +4412,6 @@ function drawStandardBeam(ctx, bColor) {
   //   shadow (full beam) until a real defect occludes. EX3 (weld→drawWeldBeam) & EX4/5/6 skip Layer B.
   var nearFieldY = beamTop + Math.min(N_px, fullD);
   var ffHWStart  = Math.min(N_px, fullD) * Math.tan(bAngle) * 0.5;
-  // v80 beam-emergence fix (2026-06-04 EDT, user v70 reference image) — the beam MUST start at the
-  // probe face (beamTop), not at nearFieldY; otherwise the near-field zone is empty and the beam
-  // looks detached from the probe. topHW = beam half-width at the probe face (≈ probe width).
-  var topHW      = Math.max(ffHWStart + 1, TX_W * 0.45);
   var _belowFactor = 1 - interactionBlock;                         // (kept name for smoke)
   var _shadowMode  = (exercise === 'resolution' || exercise === 'penetration') && hasInteraction && interactionBlock > 0.001;
 
@@ -4430,31 +4426,92 @@ function drawStandardBeam(ctx, bColor) {
 
   function _conePath(s){
     s = s || 1;
-    // Classic UT beam profile: WIDE at the probe face (topHW) so it visibly EMERGES from the probe,
-    // necks to the natural focus at the near-field end (ffHWStart), then diverges to hWBot at the
-    // back wall. (v80 2026-06-04 EDT user v70-ref fix — was a cone starting at nearFieldY = empty
-    // near-field = beam detached from probe.)
+    // Far-field cone (nearFieldY → back wall) — used ONLY by Stage B's occlusion clip, so the shadow
+    // below the defect is unchanged. The visible v70-style beam (near-field band + far-field cone +
+    // dashed boundaries + labels) is drawn in _renderBaseYellowBeam.
     ctx.beginPath();
-    ctx.moveTo(tx - topHW*s,     beamTop);      // probe face, left
-    ctx.lineTo(tx + topHW*s,     beamTop);      // probe face, right
-    ctx.lineTo(tx + ffHWStart*s, nearFieldY);   // neck (focus), right
-    ctx.lineTo(tx + hWBot*s,     beamBot);      // back wall, right
-    ctx.lineTo(tx - hWBot*s,     beamBot);      // back wall, left
-    ctx.lineTo(tx - ffHWStart*s, nearFieldY);   // neck (focus), left
+    ctx.moveTo(tx - ffHWStart*s, nearFieldY); ctx.lineTo(tx + ffHWStart*s, nearFieldY);
+    ctx.lineTo(tx + hWBot*s, beamBot);        ctx.lineTo(tx - hWBot*s, beamBot);
     ctx.closePath();
   }
   function _renderBaseYellowBeam(){
-    // soft outer glow (beam's own colour)
-    ctx.save(); ctx.shadowColor = bColor + '0.35)'; ctx.shadowBlur = 8; ctx.fillStyle = bColor + '0.10)';
-    _conePath(1.12); ctx.fill(); ctx.restore();
-    // full bright cone — vertical gradient spanning probe face → back wall, NO occlusion baked in
-    // (Layer A is pure beam). Brightest at the probe face so the beam reads as EMERGING from the probe.
-    var g = ctx.createLinearGradient(0, beamTop, 0, beamBot);
-    g.addColorStop(0,    bColor + '0.85)');   // probe face — brightest
-    g.addColorStop(0.30, bColor + '0.78)');   // near-field — still bright
-    g.addColorStop(0.65, bColor + '0.46)');
-    g.addColorStop(1,    bColor + '0.30)');   // back wall — dimmer (depth attenuation)
-    ctx.fillStyle = g; _conePath(1); ctx.fill();
+    // v80 (2026-06-04 EDT) — restore the v70 beam LOOK per user ("把光束改得跟第70版一樣"): a
+    // technical near/far-field visualisation, NOT a flat filled cone. Near-field caution band +
+    // bright core triangle from the probe face, far-field 3-layer feathered cone, dashed cone
+    // boundary lines emanating from the probe centre, NF/FF divider + D/θ½ labels. Beam runs full
+    // to the back wall (no cut); the shadow below is handled separately by Stage B (unchanged).
+
+    // ── Near-field band (0 .. N) — translucent yellow strip in the transducer column ──
+    if (nearFieldY > beamTop + 4) {
+      var nfBandHW = (D_mm/100) * fullD * 0.45;                 // visual half-width of the band
+      ctx.fillStyle = 'rgba(210,153,34,0.10)';
+      ctx.fillRect(tx - nfBandHW, beamTop, nfBandHW*2, nearFieldY - beamTop);
+      ctx.strokeStyle = 'rgba(210,153,34,0.35)';
+      ctx.setLineDash([2,3]); ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(tx-nfBandHW, nearFieldY); ctx.lineTo(tx+nfBandHW, nearFieldY); ctx.stroke();
+      ctx.setLineDash([]);
+      // bright beam core inside the near field (triangle from the probe face down to the focus)
+      var nfHW = Math.min(N_px, fullD) * Math.tan(bAngle) * 0.5;
+      var nfG  = ctx.createLinearGradient(0, beamTop, 0, nearFieldY);
+      nfG.addColorStop(0, bColor+'0.70)'); nfG.addColorStop(1, bColor+'0.55)');
+      ctx.fillStyle = nfG;
+      ctx.beginPath();
+      ctx.moveTo(tx, beamTop);
+      ctx.lineTo(tx - nfHW, nearFieldY);
+      ctx.lineTo(tx + nfHW, nearFieldY);
+      ctx.closePath(); ctx.fill();
+      // labels
+      ctx.fillStyle='rgba(210,153,34,0.78)'; ctx.font='8px JetBrains Mono,monospace';
+      ctx.textAlign='right';
+      ctx.fillText('N = '+N_mm.toFixed(1)+' mm', tx-nfBandHW-2, nearFieldY-3);
+      ctx.textAlign='left';
+      ctx.fillText('near field', tx+nfBandHW+2, beamTop+13);
+    }
+
+    // ── Far-field cone — 3-layer feathered edge (ultra-soft bloom + HQ glow + main gradient) ──
+    ctx.save();   // outermost ultra-soft bloom (1.25×, blur 14, α 0.04)
+    ctx.shadowColor = bColor + '0.30)'; ctx.shadowBlur = 14; ctx.fillStyle = bColor + '0.04)';
+    ctx.beginPath();
+    ctx.moveTo(tx-ffHWStart*1.25, nearFieldY); ctx.lineTo(tx+ffHWStart*1.25, nearFieldY);
+    ctx.lineTo(tx+hWBot*1.25, beamBot);        ctx.lineTo(tx-hWBot*1.25, beamBot);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.save();   // HQ soft-glow (1.10×, blur 7, α 0.10)
+    ctx.shadowColor = bColor + '0.45)'; ctx.shadowBlur = 7; ctx.fillStyle = bColor + '0.10)';
+    ctx.beginPath();
+    ctx.moveTo(tx-ffHWStart*1.10, nearFieldY); ctx.lineTo(tx+ffHWStart*1.10, nearFieldY);
+    ctx.lineTo(tx+hWBot*1.10, beamBot);        ctx.lineTo(tx-hWBot*1.10, beamBot);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // main far-field gradient fill (nearFieldY → back wall)
+    var beamGrad = ctx.createLinearGradient(0, nearFieldY, 0, beamBot);
+    beamGrad.addColorStop(0,    bColor+'0.52)');
+    beamGrad.addColorStop(0.55, bColor+'0.20)');
+    beamGrad.addColorStop(1,    bColor+'0.05)');
+    ctx.fillStyle = beamGrad;
+    ctx.beginPath();
+    ctx.moveTo(tx-ffHWStart, nearFieldY); ctx.lineTo(tx+ffHWStart, nearFieldY);
+    ctx.lineTo(tx+hWBot, beamBot);        ctx.lineTo(tx-hWBot, beamBot);
+    ctx.closePath(); ctx.fill();
+
+    // ── Dashed cone boundary lines from the probe centre (the v70 "V") ──
+    ctx.strokeStyle = bColor+'0.45)'; ctx.lineWidth = 1; ctx.setLineDash([3,4]);
+    ctx.beginPath(); ctx.moveTo(tx, beamTop); ctx.lineTo(tx-hWBot, beamBot); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tx, beamTop); ctx.lineTo(tx+hWBot, beamBot); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ── NF/FF divider + far-field label ──
+    if (nearFieldY < beamBot - 4) {
+      ctx.strokeStyle = bColor+'0.30)'; ctx.lineWidth = 1; ctx.setLineDash([2,6]);
+      ctx.beginPath(); ctx.moveTo(tx-hWBot*0.5, nearFieldY); ctx.lineTo(tx+hWBot*0.5, nearFieldY); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = bColor+'0.35)'; ctx.font='8px JetBrains Mono,monospace'; ctx.textAlign='left';
+      ctx.fillText('← far field', tx+hWBot*0.5+2, nearFieldY+3);
+    }
+
+    // ── beam header label ──
+    ctx.fillStyle = bColor+'0.85)'; ctx.font='10px JetBrains Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText(freq+' MHz · D='+D_mm+' mm · θ½='+(bAngle*180/Math.PI).toFixed(1)+'°', tx, beamTop+13);
   }
   function _applyShadowOcclusion(){
     // v80 §264 BO-11 — enforce the user's 2026-06-04 EDT directive literally: the beam shadow is
