@@ -2977,10 +2977,12 @@ function calculateBeamOcclusion(probeX, objLeft, objRight) {
   var objCx   = (objLeft + objRight) / 2;
   var objHalf = (objRight - objLeft) / 2;
   var reach   = bHW + objHalf;                                  // sphere radius + beam-edge radius
-  var raw     = Math.max(0, 1 - Math.abs(probeX - objCx) / reach);
-  if (raw <= 0) return 0;                                       // outside range → no shadow
-  var s = raw * raw * (3 - 2 * raw);                            // smoothstep
-  return 0.05 + 0.95 * s;                                       // v79 §261 BO-8 — 0.05 edge touch → 1.0 centre overlap
+  var dist    = Math.abs(probeX - objCx);
+  if (dist >= reach) return 0;                                  // outside range → no shadow
+  var sigma   = reach / 2.0;                                    // v79 §261 BO-8 — energy field σ
+  var e       = Math.exp(-(dist * dist) / (2 * sigma * sigma)); // Gaussian energy at the object
+  var edge    = Math.exp(-(reach * reach) / (2 * sigma * sigma)); // value at the reach edge
+  return Math.max(0, (e - edge) / (1 - edge));                  // renormalised: 0 at edge → 1 at centre (smooth, no jump)
 }
 
 // BW decays as beam covers the porosity cluster.
@@ -4389,77 +4391,49 @@ function drawStandardBeam(ctx, bColor) {
   var cutFrac = 1.0;
   var hWBot   = fullD * Math.tan(bAngle);
 
-  // ── v79 §261 BO-8 (2026-06-04 EDT, user red-light) — GAUSSIAN ENERGY-FIELD BEAM ───────────
-  // Rendered on a cached OFFSCREEN canvas in smooth passes (no strips → no banding, ~3 fills):
-  //   P1: horizontal Gaussian exp(-distX²/(2σ²)) clipped to the widening cone — axis bright, edges
-  //       foggy ("霧狀暗化向中心延伸").   P2: × vertical depth falloff via 'destination-in'.
-  //   P3: occlusion shadow carved behind the object with 'destination-out' = intensity ×(1-block);
-  //       lateral Gaussian over object+beam edge, smoothstep depth ramp → shifts/fades with probe.
-  // Finished beam composited via drawImage (alpha-blends onto the material, no banding).
+  // ── v79 §261 BO-8 (restored 2026-06-04 EDT, user red-light) — beamGrad ENERGY-GRADIENT SHADOW ─
+  // RESTORED beamGrad: the beam is the original yellow cone polygon filled with createLinearGradient.
+  // The shadow is the beam's OWN alpha fading 1.0→0.0 BELOW the object — NOT a separate layer/offscreen.
+  // The gradient axis runs from the probe face to the OBJECT (interactionX, interactionY), so dragging
+  // the probe slides the fade zone behind the object ("water-spreading"). Fade strength = interactionBlock
+  // (the energy field at the object). All on the same canvas; no destination-out, no offscreen, no blue.
   var nearFieldY = beamTop + Math.min(N_px, fullD);
-  var _bw = Math.max(2, Math.ceil(hWBot * 2) + 2), _bh = Math.max(2, Math.ceil(fullD) + 2);
-  var _bx0 = tx - hWBot - 1, _by0 = beamTop;                       // offscreen origin in canvas coords
-  if (!window._beamOff) window._beamOff = document.createElement('canvas');
-  var _off = window._beamOff;
-  if (_off.width !== _bw || _off.height !== _bh) { _off.width = _bw; _off.height = _bh; }
-  var _oc = _off.getContext('2d');
-  _oc.clearRect(0, 0, _bw, _bh);
-  var _ax = hWBot + 1;                                             // beam axis x in offscreen coords
-  // P1 — horizontal Gaussian, clipped to the cone (apex top-centre → full width at the bottom)
-  _oc.save();
-  _oc.beginPath(); _oc.moveTo(_ax, 0); _oc.lineTo(_ax + hWBot, _bh); _oc.lineTo(_ax - hWBot, _bh); _oc.closePath();
-  _oc.clip();
-  var _sigH = hWBot / 2.4;
-  var _hg = _oc.createLinearGradient(_ax - hWBot, 0, _ax + hWBot, 0);
-  for (var _gi = 0; _gi <= 18; _gi++) {
-    var _f = _gi / 18, _dx = (_f * 2 - 1) * hWBot;
-    var _I = Math.exp(-(_dx * _dx) / (2 * _sigH * _sigH));
-    _hg.addColorStop(_f, bColor + _I.toFixed(3) + ')');
+  var ffHWStart  = Math.min(N_px, fullD) * Math.tan(bAngle) * 0.5;
+  var _belowFactor = 1 - interactionBlock;                         // remaining alpha behind the object (energy-coupled; kept name for smoke)
+  function _v74AlphaAt(t){ if(t<=0)return 0.82; if(t<0.55)return 0.82+(0.46-0.82)*(t/0.55); if(t<1)return 0.46+(0.14-0.46)*((t-0.55)/0.45); return 0.14; }
+  // soft outer glow — beam's own colour, subtle (not a dark layer)
+  ctx.save();
+  ctx.shadowColor = bColor + '0.35)'; ctx.shadowBlur = 8;
+  ctx.fillStyle = bColor + '0.10)';
+  ctx.beginPath();
+  ctx.moveTo(tx - ffHWStart*1.12, nearFieldY); ctx.lineTo(tx + ffHWStart*1.12, nearFieldY);
+  ctx.lineTo(tx + hWBot*1.12, beamBot); ctx.lineTo(tx - hWBot*1.12, beamBot);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+  // beamGrad — angled toward the object so the below-object fade slides with the probe ("water-spreading")
+  var beamGrad;
+  if (hasInteraction) {
+    var _fadeLen = Math.max(10, (beamBot - interactionY) * 0.55);
+    var _endX = interactionX, _endY = interactionY + _fadeLen;
+    beamGrad = ctx.createLinearGradient(tx, beamTop, _endX, _endY);
+    var _axLen = Math.hypot(_endX - tx, _endY - beamTop);
+    var _sphOff = Math.min(0.96, Math.max(0.04, Math.hypot(interactionX - tx, interactionY - beamTop) / Math.max(1, _axLen)));
+    var _aObj = _v74AlphaAt(_sphOff);
+    beamGrad.addColorStop(0, bColor + '0.82)');                                                          // probe face: full energy
+    beamGrad.addColorStop(_sphOff, bColor + _aObj.toFixed(3) + ')');                                     // at the object: still bright
+    beamGrad.addColorStop(Math.min(0.99, _sphOff + 0.12), bColor + (_aObj * _belowFactor).toFixed(3) + ')'); // behind: 1.0 → smooth →
+    beamGrad.addColorStop(1, bColor + (0.14 * _belowFactor).toFixed(3) + ')');                           // deep: → 0.0
+  } else {
+    beamGrad = ctx.createLinearGradient(0, nearFieldY, 0, beamBot);
+    beamGrad.addColorStop(0, bColor + '0.82)');
+    beamGrad.addColorStop(0.55, bColor + '0.46)');
+    beamGrad.addColorStop(1, bColor + '0.14)');
   }
-  _oc.fillStyle = _hg;
-  _oc.fillRect(0, 0, _bw, _bh);
-  // P2 — multiply by vertical depth falloff (bright near surface → faint at BW)
-  _oc.globalCompositeOperation = 'destination-in';
-  var _vg = _oc.createLinearGradient(0, 0, 0, _bh);
-  _vg.addColorStop(0, 'rgba(255,255,255,0.95)');
-  _vg.addColorStop(0.5, 'rgba(255,255,255,0.55)');
-  _vg.addColorStop(1, 'rgba(255,255,255,0.16)');
-  _oc.fillStyle = _vg;
-  _oc.fillRect(0, 0, _bw, _bh);
-  // P3 — occlusion shadow behind the object (= beam ×(1-block)), built on a 2nd offscreen as a
-  // SMOOTH mask (horizontal Gaussian × vertical ramp), then erased in one destination-out drawImage.
-  if (hasInteraction && interactionBlock > 0.001) {
-    var _belowFactor = 1 - interactionBlock;                       // intensity multiplier behind the object (kept name for smoke)
-    var _ix = interactionX - _bx0, _iy = interactionY - _by0;      // object centre in offscreen coords
-    var _shR = Math.max(interactionR + 6, hWBot * 0.55), _shSig = _shR / 1.7;
-    if (!window._shadOff) window._shadOff = document.createElement('canvas');
-    var _shc = window._shadOff;
-    if (_shc.width !== _bw || _shc.height !== _bh) { _shc.width = _bw; _shc.height = _bh; }
-    var _sc = _shc.getContext('2d');
-    _sc.clearRect(0, 0, _bw, _bh);
-    // horizontal Gaussian (peak alpha = interactionBlock at the object centre)
-    var _mg = _sc.createLinearGradient(_ix - _shR, 0, _ix + _shR, 0);
-    for (var _si2 = 0; _si2 <= 14; _si2++) {
-      var _sf = _si2 / 14, _sdx = (_sf * 2 - 1) * _shR;
-      var _mI = (1 - _belowFactor) * Math.exp(-(_sdx * _sdx) / (2 * _shSig * _shSig));
-      _mg.addColorStop(_sf, 'rgba(0,0,0,' + Math.min(1, _mI).toFixed(3) + ')');
-    }
-    _sc.fillStyle = _mg;
-    _sc.fillRect(_ix - _shR, 0, _shR * 2, _bh);
-    // × vertical ramp: 0 above object → 1 just below → hold to BW (destination-in)
-    _sc.globalCompositeOperation = 'destination-in';
-    var _mv = _sc.createLinearGradient(0, _iy, 0, _bh);
-    _mv.addColorStop(0,    'rgba(255,255,255,0)');
-    _mv.addColorStop(0.12, 'rgba(255,255,255,1)');
-    _mv.addColorStop(1,    'rgba(255,255,255,1)');
-    _sc.fillStyle = _mv;
-    _sc.fillRect(0, 0, _bw, _bh);
-    // erase that fraction of the beam (smooth — one composite, no strips)
-    _oc.globalCompositeOperation = 'destination-out';
-    _oc.drawImage(_shc, 0, 0);
-  }
-  _oc.restore();
-  ctx.drawImage(_off, _bx0, _by0);
+  ctx.fillStyle = beamGrad;
+  ctx.beginPath();
+  ctx.moveTo(tx - ffHWStart, nearFieldY); ctx.lineTo(tx + ffHWStart, nearFieldY);
+  ctx.lineTo(tx + hWBot, beamBot); ctx.lineTo(tx - hWBot, beamBot);
+  ctx.closePath(); ctx.fill();
 
   // v79 §260 BO-5 (clipped interface highlight) — REMOVED 2026-06-04 EDT per user
   // ("你上次加入的藍色高光不符合我的需求"). No cyan / extra line above the defect.
