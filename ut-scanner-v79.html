@@ -4387,6 +4387,10 @@ function drawStandardBeam(ctx, bColor) {
     if (bestAmp > 0.001) hasInteraction = true;       // v79 §261 BO-8 — edge touch already reacts
     interactionBlock = getLineDefSignal().block;         // EX01 — unified calculateBeamOcclusion (same as EX02)
   }
+  // §1 EX3 shadow-suppression — the block shadow is EX1/EX2 ('resolution'/'penetration') ONLY.
+  // `exercise` is the in-scope global (no param needed). EX3 (weld) renders via drawWeldBeam and
+  // never reaches here; EX4/5/6 (grating/maze/immersion) also get the clean full beam, no shadow.
+  if (exercise !== 'resolution' && exercise !== 'penetration') { interactionBlock = 0; hasInteraction = false; }
   // Cone geometry — UNCHANGED from v74: full half-width at beamBot, full far-field cone.
   var cutFrac = 1.0;
   var hWBot   = fullD * Math.tan(bAngle);
@@ -4419,10 +4423,17 @@ function drawStandardBeam(ctx, bColor) {
     var _axLen = Math.hypot(_endX - tx, _endY - beamTop);
     var _sphOff = Math.min(0.96, Math.max(0.04, Math.hypot(interactionX - tx, interactionY - beamTop) / Math.max(1, _axLen)));
     var _aObj = _v74AlphaAt(_sphOff);
+    // §2 — Math.pow(block,2) keeps contrast; minAlpha 0.15 floor so the beam NEVER fully disappears;
+    // every alpha clamped to [0.15, 0.95] so a large block can't produce a negative/illegal value.
+    var _b2 = interactionBlock * interactionBlock;        // = Math.pow(block, 2)
+    var _MIN = 0.15;
+    function _clampA(v){ return Math.max(_MIN, Math.min(0.95, v)); }
+    var _behindA = _clampA(_aObj * (1 - _b2));            // just behind the object
+    var _deepA   = _clampA(0.14 * (1 - _b2));             // at the BW (floored → faint but visible)
     beamGrad.addColorStop(0, bColor + '0.82)');                                                          // probe face: full energy
     beamGrad.addColorStop(_sphOff, bColor + _aObj.toFixed(3) + ')');                                     // at the object: still bright
-    beamGrad.addColorStop(Math.min(0.99, _sphOff + 0.12), bColor + (_aObj * _belowFactor).toFixed(3) + ')'); // behind: 1.0 → smooth →
-    beamGrad.addColorStop(1, bColor + (0.14 * _belowFactor).toFixed(3) + ')');                           // deep: → 0.0
+    beamGrad.addColorStop(Math.min(0.99, _sphOff + 0.12), bColor + _behindA.toFixed(3) + ')');           // behind: smooth → floor 0.15
+    beamGrad.addColorStop(1, bColor + _deepA.toFixed(3) + ')');                                          // deep: floored at 0.15 (no full disappear)
   } else {
     beamGrad = ctx.createLinearGradient(0, nearFieldY, 0, beamBot);
     beamGrad.addColorStop(0, bColor + '0.82)');
