@@ -14,6 +14,8 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 **Final beam/shadow render fix** (user directive "最終渲染修正 → 直接 Ship"). Targets the v79 review of EX1/2 + EX3. ruleCodes `BO-9,BO-10,BO-11`; node `--check` clean.
 
+**Hotfix 2026-06-04 EDT (pipeline refactor, same version v80 per user "用80版修改即可"):** `drawStandardBeam` dispatch is now a strict two-stage pipeline with `globalAlpha` guards — `ctx.globalAlpha = 1.0` is force-reset BOTH before and after `_renderBaseYellowBeam()` (Stage A), so a stray alpha left by an earlier draw (e.g. `drawLobe`'s `globalAlpha = intensity` in EX04) can never fade/erase the beam. Stage A path has no `clip`/`destination-out`; Stage B (`_applyShadowOcclusion`, EX1/EX2 only) stacks on top. The `contrastBlock = max(0,(block-0.15)*1.6)` formula and A/B split were already present from the initial v80 ship — this hotfix adds the alpha hardening + makes the two stages explicit. Stale `Math.pow(block,2)` comment corrected. node `--check` clean.
+
 ### New rules (CLAUDE.md §262–§264)
 
 | §   | Code  | One-liner |

@@ -1056,6 +1056,7 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 263\. 【BO-10 · EX3 探頭接觸陰影移除(Clean Weld Beam)】探頭接觸陰影柱(System 1,`drawScan` 內 `SURF_Y` 起的深色 `rgba(0,0,0)` 梯形 column + 接觸點 radial glow,§216 A2 / §222 A2.2 / §231 SH1)原本對 maze/grating 以外全 EX 繪製,**含 EX3(weld)**。v80 在 guard 加 `exercise !== 'weld'` → EX3 探頭處只剩乾淨黃/青光束,**絕無任何深色陰影柱或接觸光暈**(對應使用者「移除探頭處的黑色陰影、EX3 只顯示完整黃色光束」)。EX1/EX2 接觸陰影保留(其缺陷遮擋陰影由 BO-9 加強)。
 
 264\. 【BO-11 · EX3 防禦性 guard + 光束不裁切】`_applyShadowOcclusion` 開頭加 `if (exercise === 'weld') return;` —— EX3 本就走 `drawWeldBeam` 不會呼叫此函式,但依使用者字面指令「在陰影函式加 EX3 強制 return」明確守衛,確保 EX3 永不繪製 beam 陰影。同時宣示:亮錐(Layer A `_renderBaseYellowBeam`)永遠在陰影之前無 clip 繪製,唯一 `ctx.clip()` 包在 save/restore 內僅作用於陰影漸層,**光束渲染路徑不被任何遮罩裁切**(對應使用者「確保渲染路徑不會被任何遮罩裁切」)。
+  - **【2026-06-04 EDT 渲染管線重構 / 使用者直接指令(同 v80,不升版)】** `drawStandardBeam` dispatch 改為嚴格兩階段 + globalAlpha 護欄:Stage A 前後各 `ctx.globalAlpha = 1.0;` 強制重置,確保任何前面繪圖(如 EX04 `drawLobe` 的 `globalAlpha = intensity`)殘留的 alpha 都不會讓黃光淡掉/消失;Stage A(`_renderBaseYellowBeam`)路徑無 clip / 無 destination-out;Stage B(`_applyShadowOcclusion`)僅 EX1/EX2 疊加。對應使用者「保證黃光在 EX1/EX2 下絕對不會消失」。
 
 
 

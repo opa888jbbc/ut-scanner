@@ -4402,15 +4402,21 @@ function drawStandardBeam(ctx, bColor) {
   // LAYER A (_renderBaseYellowBeam): the FULL bright beam — ALWAYS drawn, never touched by occlusion,
   //   so the beam can never be "overridden"/disappear. LAYER B (_applyShadowOcclusion): EX1/EX2 ONLY —
   //   below the object the beam fades INTO the material tone (beam absent = occlusion), strength
-  //   Math.pow(block,2), capped at 0.85 so ≥15% of the beam always remains (no full disappear, no
-  //   negative/illegal alpha). EX3 (weld→drawWeldBeam) & EX4/5/6 skip Layer B → clean full beam.
+  //   contrastBlock = max(0,(block-0.15)·1.6) (BO-9), clamped ≤0.92 — a 0.15 dead-zone means NO
+  //   shadow (full beam) until a real defect occludes. EX3 (weld→drawWeldBeam) & EX4/5/6 skip Layer B.
   var nearFieldY = beamTop + Math.min(N_px, fullD);
   var ffHWStart  = Math.min(N_px, fullD) * Math.tan(bAngle) * 0.5;
   var _belowFactor = 1 - interactionBlock;                         // (kept name for smoke)
   var _shadowMode  = (exercise === 'resolution' || exercise === 'penetration') && hasInteraction && interactionBlock > 0.001;
 
-  _renderBaseYellowBeam();                  // ── LAYER A: always ──
-  if (_shadowMode) _applyShadowOcclusion(); // ── LAYER B: EX1/EX2 only ──
+  // ── v80 BO-11 (2026-06-04 EDT, user pipeline-refactor) — STRICT TWO-STAGE PIPELINE ──
+  // Stage A draws the FULL yellow beam with NO clip / NO destination-out on its path, and globalAlpha
+  // is force-reset to 1.0 BOTH before and after, so a stray alpha left by any earlier draw (e.g.
+  // drawLobe in EX04) can never fade or erase the beam. Stage B (shadow) is EX1/EX2 only, stacked on top.
+  ctx.globalAlpha = 1.0;                      // reset BEFORE Stage A — beam can't inherit a faded alpha
+  _renderBaseYellowBeam();                    // ── STAGE A: full beam, ALWAYS, mask-free ──
+  ctx.globalAlpha = 1.0;                      // reset AFTER Stage A — clean state for Stage B / rest
+  if (_shadowMode) _applyShadowOcclusion();   // ── STAGE B: EX1/EX2 occlusion shadow only ──
 
   function _conePath(s){
     s = s || 1;
