@@ -279,7 +279,7 @@
 <meta charset="UTF-8">
 <!-- v50 α5 — removed user-scalable=no + maximum-scale to allow mobile pinch zoom -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>UT NDT Training Simulator — v79</title>
+<title>UT NDT Training Simulator — v80</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -973,7 +973,7 @@ body.alarm-pulse::before {
 <body>
 
 <div class="header">
-  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v79</span></h1>
+  <h1>UT NDT Trainer <span style="font-size:10px;font-weight:500;color:var(--muted);letter-spacing:0;">v80</span></h1>
   <span class="badge">Pulse-Echo</span>
   <span class="badge" id="freq-badge">5 MHz</span>
   <span class="badge ok" id="ex-badge">Exercise 1</span>
@@ -3591,7 +3591,10 @@ function drawScan() {
   //   in EX01 which is physically wrong. v73 picks the shallowest in-column defect and clips the
   //   column to its top edge, then fades alpha inside the defect with a smoothstep to avoid the
   //   hard-edged "cut off" look.
-  if (exercise !== 'maze' && exercise !== 'grating' && typeof MAT_X === 'number' && typeof MAT_Y === 'number') {
+  // v80 §263 BO-10 — EX3 (weld) probe contact-shadow REMOVED per user 2026-06-04 EDT: in EX3 the
+  // transducer area must show ONLY the clean yellow/cyan beam — absolutely no dark shadow column or
+  // contact glow. EX1/EX2 keep the contact shadow; their defect-occlusion shadow is strengthened (BO-9).
+  if (exercise !== 'maze' && exercise !== 'grating' && exercise !== 'weld' && typeof MAT_X === 'number' && typeof MAT_Y === 'number') {
     var isDragging = (typeof dragging !== 'undefined' && dragging);
     var topA  = isDragging ? 0.40 : 0.30;
     var midA  = isDragging ? 0.18 : 0.12;
@@ -4395,56 +4398,60 @@ function drawStandardBeam(ctx, bColor) {
   var cutFrac = 1.0;
   var hWBot   = fullD * Math.tan(bAngle);
 
-  // ── v79 §261 BO-8 (restored 2026-06-04 EDT, user red-light) — beamGrad ENERGY-GRADIENT SHADOW ─
-  // RESTORED beamGrad: the beam is the original yellow cone polygon filled with createLinearGradient.
-  // The shadow is the beam's OWN alpha fading 1.0→0.0 BELOW the object — NOT a separate layer/offscreen.
-  // The gradient axis runs from the probe face to the OBJECT (interactionX, interactionY), so dragging
-  // the probe slides the fade zone behind the object ("water-spreading"). Fade strength = interactionBlock
-  // (the energy field at the object). All on the same canvas; no destination-out, no offscreen, no blue.
+  // ── v79 §261 BO-8 (2026-06-04 EDT, user red-light) — TOTAL PIPELINE SEPARATION ─────────────
+  // LAYER A (_renderBaseYellowBeam): the FULL bright beam — ALWAYS drawn, never touched by occlusion,
+  //   so the beam can never be "overridden"/disappear. LAYER B (_applyShadowOcclusion): EX1/EX2 ONLY —
+  //   below the object the beam fades INTO the material tone (beam absent = occlusion), strength
+  //   Math.pow(block,2), capped at 0.85 so ≥15% of the beam always remains (no full disappear, no
+  //   negative/illegal alpha). EX3 (weld→drawWeldBeam) & EX4/5/6 skip Layer B → clean full beam.
   var nearFieldY = beamTop + Math.min(N_px, fullD);
   var ffHWStart  = Math.min(N_px, fullD) * Math.tan(bAngle) * 0.5;
-  var _belowFactor = 1 - interactionBlock;                         // remaining alpha behind the object (energy-coupled; kept name for smoke)
-  function _v74AlphaAt(t){ if(t<=0)return 0.82; if(t<0.55)return 0.82+(0.46-0.82)*(t/0.55); if(t<1)return 0.46+(0.14-0.46)*((t-0.55)/0.45); return 0.14; }
-  // soft outer glow — beam's own colour, subtle (not a dark layer)
-  ctx.save();
-  ctx.shadowColor = bColor + '0.35)'; ctx.shadowBlur = 8;
-  ctx.fillStyle = bColor + '0.10)';
-  ctx.beginPath();
-  ctx.moveTo(tx - ffHWStart*1.12, nearFieldY); ctx.lineTo(tx + ffHWStart*1.12, nearFieldY);
-  ctx.lineTo(tx + hWBot*1.12, beamBot); ctx.lineTo(tx - hWBot*1.12, beamBot);
-  ctx.closePath(); ctx.fill();
-  ctx.restore();
-  // beamGrad — angled toward the object so the below-object fade slides with the probe ("water-spreading")
-  var beamGrad;
-  if (hasInteraction) {
-    var _fadeLen = Math.max(10, (beamBot - interactionY) * 0.55);
-    var _endX = interactionX, _endY = interactionY + _fadeLen;
-    beamGrad = ctx.createLinearGradient(tx, beamTop, _endX, _endY);
-    var _axLen = Math.hypot(_endX - tx, _endY - beamTop);
-    var _sphOff = Math.min(0.96, Math.max(0.04, Math.hypot(interactionX - tx, interactionY - beamTop) / Math.max(1, _axLen)));
-    var _aObj = _v74AlphaAt(_sphOff);
-    // §2 — Math.pow(block,2) keeps contrast; minAlpha 0.15 floor so the beam NEVER fully disappears;
-    // every alpha clamped to [0.15, 0.95] so a large block can't produce a negative/illegal value.
-    var _b2 = interactionBlock * interactionBlock;        // = Math.pow(block, 2)
-    var _MIN = 0.15;
-    function _clampA(v){ return Math.max(_MIN, Math.min(0.95, v)); }
-    var _behindA = _clampA(_aObj * (1 - _b2));            // just behind the object
-    var _deepA   = _clampA(0.14 * (1 - _b2));             // at the BW (floored → faint but visible)
-    beamGrad.addColorStop(0, bColor + '0.82)');                                                          // probe face: full energy
-    beamGrad.addColorStop(_sphOff, bColor + _aObj.toFixed(3) + ')');                                     // at the object: still bright
-    beamGrad.addColorStop(Math.min(0.99, _sphOff + 0.12), bColor + _behindA.toFixed(3) + ')');           // behind: smooth → floor 0.15
-    beamGrad.addColorStop(1, bColor + _deepA.toFixed(3) + ')');                                          // deep: floored at 0.15 (no full disappear)
-  } else {
-    beamGrad = ctx.createLinearGradient(0, nearFieldY, 0, beamBot);
-    beamGrad.addColorStop(0, bColor + '0.82)');
-    beamGrad.addColorStop(0.55, bColor + '0.46)');
-    beamGrad.addColorStop(1, bColor + '0.14)');
+  var _belowFactor = 1 - interactionBlock;                         // (kept name for smoke)
+  var _shadowMode  = (exercise === 'resolution' || exercise === 'penetration') && hasInteraction && interactionBlock > 0.001;
+
+  _renderBaseYellowBeam();                  // ── LAYER A: always ──
+  if (_shadowMode) _applyShadowOcclusion(); // ── LAYER B: EX1/EX2 only ──
+
+  function _conePath(s){
+    s = s || 1;
+    ctx.beginPath();
+    ctx.moveTo(tx - ffHWStart*s, nearFieldY); ctx.lineTo(tx + ffHWStart*s, nearFieldY);
+    ctx.lineTo(tx + hWBot*s, beamBot);        ctx.lineTo(tx - hWBot*s, beamBot);
+    ctx.closePath();
   }
-  ctx.fillStyle = beamGrad;
-  ctx.beginPath();
-  ctx.moveTo(tx - ffHWStart, nearFieldY); ctx.lineTo(tx + ffHWStart, nearFieldY);
-  ctx.lineTo(tx + hWBot, beamBot); ctx.lineTo(tx - hWBot, beamBot);
-  ctx.closePath(); ctx.fill();
+  function _renderBaseYellowBeam(){
+    // soft outer glow (beam's own colour)
+    ctx.save(); ctx.shadowColor = bColor + '0.35)'; ctx.shadowBlur = 8; ctx.fillStyle = bColor + '0.10)';
+    _conePath(1.12); ctx.fill(); ctx.restore();
+    // full bright cone — vertical bright gradient, NO occlusion baked in (Layer A is pure beam)
+    var g = ctx.createLinearGradient(0, nearFieldY, 0, beamBot);
+    g.addColorStop(0, bColor + '0.82)'); g.addColorStop(0.55, bColor + '0.46)'); g.addColorStop(1, bColor + '0.30)');
+    ctx.fillStyle = g; _conePath(1); ctx.fill();
+  }
+  function _applyShadowOcclusion(){
+    // v80 §264 BO-11 — enforce the user's 2026-06-04 EDT directive literally: the beam shadow is
+    // EX1/EX2 ONLY. EX3 (weld) already routes through drawWeldBeam and never calls this, but guard
+    // anyway so EX3 can NEVER render a beam shadow — it stays a clean, full yellow/cyan beam.
+    if (exercise === 'weld') return;                            // EX3 → no beam shadow, ever
+    // v80 §262 BO-9 — stronger, more obvious shadow. contrastBlock = max(0,(block-0.15)·1.6): a 0.15
+    // dead-zone (weak/edge contact → 0 → the FULL beam shows under the probe), then ×1.6 gain so a
+    // real occluding defect drives a clearly darker shadow than the old block². Below the object the
+    // beam fades to the MATERIAL tone, anchored at the object's X so the fade tracks the object.
+    var block         = interactionBlock;
+    var contrastBlock = Math.max(0, (block - 0.15) * 1.6);
+    var _occA         = Math.max(0, Math.min(0.92, contrastBlock)); // clamp ≤0.92 (legal alpha, no pure-black void)
+    if (_occA < 0.01) return;                                   // below dead-zone → skip → full beam
+    var _fadeLen = Math.max(10, (beamBot - interactionY) * 0.55);
+    ctx.save();
+    _conePath(1); ctx.clip();                                    // only inside the beam — never the material outside
+    var g = ctx.createLinearGradient(interactionX, interactionY, interactionX, interactionY + _fadeLen);
+    g.addColorStop(0,    'rgba(26,42,58,0)');                    // at the object: beam untouched
+    g.addColorStop(0.55, 'rgba(26,42,58,' + _occA.toFixed(3) + ')'); // below: beam absorbed into material tone
+    g.addColorStop(1,    'rgba(26,42,58,' + _occA.toFixed(3) + ')');
+    ctx.fillStyle = g;
+    ctx.fillRect(tx - hWBot, interactionY, hWBot * 2, beamBot - interactionY + 2);
+    ctx.restore();
+  }
 
   // v79 §260 BO-5 (clipped interface highlight) — REMOVED 2026-06-04 EDT per user
   // ("你上次加入的藍色高光不符合我的需求"). No cyan / extra line above the defect.
@@ -5971,7 +5978,7 @@ function exportScanPlan(){
   md += '- **Display mode:** ' + (advancedMode ? 'ADVANCED' : 'BASIC') + ' / ' + learnMode.toUpperCase() + '\n';
   md += '- **Probe position X:** ' + Math.round((txX-MAT_X)/MAT_W*240) + ' mm\n';
   md += '- **Sound-path range:** 0..200 mm\n';
-  md += '- **Generated by:** UT NDT Trainer v79\n';
+  md += '- **Generated by:** UT NDT Trainer v80\n';
   // v59 §99 CX — append Corrosion Maze score if a round has been revealed.
   if (mazeScore) {
     var hrPct = (mazeScore.hitRate*100).toFixed(0);
@@ -7682,17 +7689,17 @@ if (savedMode === 'quiz') {
 // runSmokeTests audits that each code appears as a `§N XX —` comment in the page
 // HTML (proves the touch point is tagged); missing codes log a banner warning.
 var __VERSION_DELTA__ = Object.freeze({
-  version: 'v79',
-  // v79 ships 4 rules (BO-1..BO-4 — Beam Overhaul per 2026-06-03 EDT user "全採 B1–B4").
-  // 4th pass at the same complaint; v75/76/77 only tweaked the shadow gradient. v79 directly
-  // reproduces the reference video's (videolibrary.teachable.com) 3 visible elements + declutter.
-  //   §256 BO-1 — Bold incident cone: core gradient alpha 0.52→0.82 / 0.20→0.46 / 0.05→0.14
-  //   §257 BO-2 — Bold cyan reflection: EX02 _drawSdh normalised `hit` drives reflection + glow
-  //   §258 BO-3 — Visible smooth shadow: _belowFactor/_bloomBelow ×0.97 → ×0.75 (full block→0.25)
-  //   §259 BO-4 — Declutter: near-field band / cone dashed / θ label / sound-path dashed dimmed
-  // (BO-5 clipped interface highlight removed 2026-06-04 EDT per user — back to BO-1..BO-4.)
-  // Scope: EX01 5 pores + EX02 4 SDHs (drawStandardBeam path). EX03 weld backport queued v79+.
-  ruleCodes: ['BO-1','BO-2','BO-3','BO-4']
+  version: 'v80',
+  // v80 ships 3 rules (BO-9..BO-11 — final beam/shadow render fix per 2026-06-04 EDT user directive
+  // "最終渲染修正"). Targets the exact EX1/2 + EX3 complaints from the v79 review.
+  //   §262 BO-9  — EX1/2 stronger shadow: _applyShadowOcclusion alpha = max(0,(block-0.15)·1.6),
+  //                clamp ≤0.92. The 0.15 dead-zone keeps the FULL yellow beam under the probe when
+  //                there is no real occluding defect; a real defect now casts a clearly darker shadow.
+  //   §263 BO-10 — EX3 clean beam: the transducer contact-shadow column + glow is suppressed for
+  //                weld, so EX3 shows ONLY the yellow/cyan beam — no dark shadow at the probe.
+  //   §264 BO-11 — EX3 defensive guard: _applyShadowOcclusion early-returns for weld; the bright
+  //                beam (Layer A) is always drawn unclipped (the only clip() scopes the shadow alone).
+  ruleCodes: ['BO-9','BO-10','BO-11']
 });
 // v66 §196 GQ — the rule-code audit serialises the whole document (innerHTML) and regex-tests
 // each code. The HTML never changes after load, so cache the result and skip the expensive
@@ -7754,8 +7761,8 @@ function runSmokeTests(){
   ok('__VERSION_DELTA__ frozen', Object.isFrozen(__VERSION_DELTA__));
   // v66 §200 GU — the hand-maintained ruleCodes list must match the count of rules adopted
   // for this ship. v78 adopts 4 XS-1 rules; update this expected count per ship.
-  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 4, __VERSION_DELTA__.ruleCodes.length);
-  ok('v79 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'BO-1,BO-2,BO-3,BO-4');
+  ok('ruleCodes count matches ship', __VERSION_DELTA__.ruleCodes.length === 3, __VERSION_DELTA__.ruleCodes.length);
+  ok('v80 ruleCodes are correct', __VERSION_DELTA__.ruleCodes.join(',') === 'BO-9,BO-10,BO-11');
   // v77 §244 SH9-b — generic getReflectionPath helper present.
   ok('SH9-b getReflectionPath fn',     typeof getReflectionPath === 'function');
   ok('SH9-b reflection helper fn',     typeof _drawSH9SpecularReflection === 'function');

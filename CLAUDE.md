@@ -1046,6 +1046,19 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 
 
 
+（以下規則 262\~264 由使用者於 2026-06-04 EDT「最終渲染修正 → 直接 Ship」直接指令納入,對應 v80 BO-9/BO-10/BO-11。使用者精準 spec:EX1/2 補強陰影 + EX3 探頭處乾淨黃光無陰影。屬既有 §1/§4/§261 render 行為的修正,非新物理條件,使用者明示公式 + 直接授權,不走建議書流程。）
+
+262\. 【BO-9 · EX1/EX2 陰影對比加強(Stronger Occlusion Contrast)】`drawStandardBeam` 的 `_applyShadowOcclusion`(System 2,缺陷下方 beam 自身 alpha 淡入材質色調)把舊的 `_b2 = block²`(cap 0.85)改成使用者明示公式 `contrastBlock = Math.max(0, (block − 0.15) × 1.6)`,alpha clamp ≤ 0.92。
+  - **0.15 dead-zone**:block < 0.15(弱觸/邊緣掠過、無實際遮擋缺陷)→ contrastBlock = 0 → `_occA < 0.01` early-return → **探頭下方黃光完整呈現**(對應使用者「恢復完整黃色光束」)。
+  - **×1.6 gain**:真正擋住聲束的缺陷 → 陰影明顯比舊 block² 更深(block=0.5 舊 0.25 → 新 0.56;block=0.8 舊 0.64 → 新 clamp 0.92)。符合使用者「陰影感更強、更明顯」。
+  - cone 幾何不變(SH9-a 形狀守恆);Layer A 亮錐永遠先畫且不被裁切(唯一 `clip()` 在 save/restore 內只圈住陰影 fill,不碰光束)。
+
+263\. 【BO-10 · EX3 探頭接觸陰影移除(Clean Weld Beam)】探頭接觸陰影柱(System 1,`drawScan` 內 `SURF_Y` 起的深色 `rgba(0,0,0)` 梯形 column + 接觸點 radial glow,§216 A2 / §222 A2.2 / §231 SH1)原本對 maze/grating 以外全 EX 繪製,**含 EX3(weld)**。v80 在 guard 加 `exercise !== 'weld'` → EX3 探頭處只剩乾淨黃/青光束,**絕無任何深色陰影柱或接觸光暈**(對應使用者「移除探頭處的黑色陰影、EX3 只顯示完整黃色光束」)。EX1/EX2 接觸陰影保留(其缺陷遮擋陰影由 BO-9 加強)。
+
+264\. 【BO-11 · EX3 防禦性 guard + 光束不裁切】`_applyShadowOcclusion` 開頭加 `if (exercise === 'weld') return;` —— EX3 本就走 `drawWeldBeam` 不會呼叫此函式,但依使用者字面指令「在陰影函式加 EX3 強制 return」明確守衛,確保 EX3 永不繪製 beam 陰影。同時宣示:亮錐(Layer A `_renderBaseYellowBeam`)永遠在陰影之前無 clip 繪製,唯一 `ctx.clip()` 包在 save/restore 內僅作用於陰影漸層,**光束渲染路徑不被任何遮罩裁切**(對應使用者「確保渲染路徑不會被任何遮罩裁切」)。
+
+
+
 遠端開發生產與「模糊歷史掃描」規範（加拿大時間基準）
 
 

@@ -10,6 +10,31 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ---
 
+## v80 — 2026-06-04 EDT
+
+**Final beam/shadow render fix** (user directive "最終渲染修正 → 直接 Ship"). Targets the v79 review of EX1/2 + EX3. ruleCodes `BO-9,BO-10,BO-11`; node `--check` clean.
+
+### New rules (CLAUDE.md §262–§264)
+
+| §   | Code  | One-liner |
+|-----|-------|-----------|
+| 262 | BO-9  | EX1/2 stronger shadow — `_applyShadowOcclusion` alpha = `Math.max(0,(block-0.15)*1.6)` clamp ≤0.92 (was `block²` cap 0.85). 0.15 dead-zone ⇒ full beam under probe when no occluding defect; ×1.6 gain ⇒ clearly darker shadow on a real defect. |
+| 263 | BO-10 | EX3 clean beam — transducer contact-shadow column + glow (the `rgba(0,0,0)` trapezoid, §216/§222/§231) now excludes `weld`; EX3 probe shows ONLY the beam, no dark shadow. |
+| 264 | BO-11 | EX3 defensive guard — `_applyShadowOcclusion` early-returns for `weld`; Layer A bright beam always drawn unclipped (the only `clip()` scopes the shadow inside save/restore). |
+
+### Modified functions
+- `drawStandardBeam._applyShadowOcclusion` — BO-9 (`contrastBlock` formula replaces `_b2`), BO-11 (weld early-return). `_belowFactor` / `interactionBlock` / `beamBot` / `createLinearGradient` all retained (smoke).
+- `drawScan` contact-shadow column — BO-10 (`exercise !== 'weld'` added to the maze/grating guard at the `isDragging` block).
+
+### Smoke
+- `__VERSION_DELTA__.version = 'v80'`, `ruleCodes = ['BO-9','BO-10','BO-11']`; count assertion → 3; rule-code audit tags `BO-9 —` / `BO-10 —` / `BO-11 —` present in source.
+
+### Touched files
+- `ut-scanner-v80.html` (was v79; renamed + 3 version strings: title / h1 span / Export-plan Generated-by)
+- `CLAUDE.md` §262–§264 · `CHANGELOG.md`
+
+---
+
 ## v79 — 2026-06-03 EDT
 
 **Hotfix 2026-06-04 EDT (user red-light):** (1) **BO-5 removed** — the clipped cyan interface highlight ("藍色高光不符合我的需求"); no cyan/extra line above the defect. (2) **`getPlanarSignal().block` rewritten** from `maxOverlap / _maxPossOv` (jumped 0→1 over a tiny probe move on a Φ3mm SDH → shadow/BW snapped on) to a **geometric distance + smoothstep** model: `block = smoothstep(max(0, 1 − dist/beamHalfWidthPx()))`, `dist = |txX − active-SDH centre|`. Occlusion now fades smoothly across the whole beam width (verified sweep: block 1.0 → 0.78 → 0.35 → 0.03 → 0; bwAmp rises in step). ruleCodes back to `BO-1..BO-4`; smoke 69/69. (3) **EX01 occlusion unified with EX02** — extracted shared `calculateBeamOcclusion(probeX, objLeft, objRight)` (reach = `beamHalfWidth + objectHalfWidth`, smoothstep). Both `getPlanarSignal` (EX02 SDH) and `getLineDefSignal` (EX01 cluster) call it; EX01 `interactionBlock` + BW now driven by it → EX01 & EX02 produce an **identical** smooth curve (both sweep 1.0 → 0.784 → 0.352 → 0.028 → 0). Boundary-aware `reach` handles the wide pore cluster vs the point SDH. No regression; smoke 69/69. **(4) BO-8 Gaussian energy-field beam (§261)** — `drawStandardBeam` rewritten: beam rendered on a cached offscreen canvas as a horizontal Gaussian `exp(-distX²/2σ²)` (axis bright, foggy edges) × vertical depth falloff (`destination-in`); occlusion carved as a smooth horizontal-Gaussian × vertical-ramp mask via `destination-out` (= beam ×(1−block)) — no strips/banding, ~4 fills/frame. `calculateBeamOcclusion` now maps 0.05 (edge touch) → 1.0 (centre). Removed old beamGrad / bloom / near-field band / cone lines / θ label → only the yellow beam + the object's shadow. EX1 + EX2 share it (drawStandardBeam serves both). Smoke 69/69 (XS-1-a assertion updated to the Gaussian build). Version kept v79 per user "不用更新版本". **(BO-8 RESTORED 2026-06-04 — user red-light)** the offscreen / `destination-out` approach was reverted ("that deleted beamGrad / was an extra overlaid layer"): the original **beamGrad** cone polygon + `createLinearGradient` fill is restored, and the shadow is now the beam's **OWN alpha** fading 1.0→0.0 below the object via an **angled** gradient whose axis runs probe→object `(interactionX, interactionY)` — so the fade zone **slides** behind the object as you drag ("water-spreading"). `calculateBeamOcclusion` → **Gaussian energy field** `exp(-dist²/2σ²)` (renormalised 0 at reach edge → 1 at centre). All on the same canvas; no offscreen, no destination-out, no blue lines. Smoke 69/69. **(EX3 guard + EX1/EX2 floor 2026-06-04)** `drawStandardBeam` now suppresses the `block` shadow for any exercise except `resolution`/`penetration` (`if (exercise !== 'resolution' && exercise !== 'penetration') { interactionBlock = 0; hasInteraction = false; }`) — EX3 (weld) renders via `drawWeldBeam` and was already shadow-free, EX4/5/6 get the clean full beam too. EX1/EX2 shadow alpha now uses `Math.pow(block,2)` for contrast, a `minAlpha 0.15` floor (beam never fully disappears), and all stop alphas clamped to `[0.15, 0.95]` (no negative/illegal alpha). `exercise` was already an in-scope global (no param needed). Smoke 69/69.
