@@ -10,6 +10,55 @@ Audit / regression source-of-truth. Every ship from v63 onward records:
 
 ---
 
+## v80 — modular architecture refactor (2026-06-07 EDT)
+
+**No feature/behaviour change.** Same v80 feature set + rule spec (§1–§264); the 8000+ line
+single-file `ut-scanner-v80.html` was split into a deployable modular structure so each
+exercise/module can be shipped and reviewed on its own. Tracked end-to-end in
+`MODULAR_REFACTOR_PLAN.md` (Stages 0–6). Smoke 58/58 + VERIFY green throughout.
+
+### New structure (`ut-scanner-modular/`)
+```
+index.html              DOM + CSS shell; <script src> loads in order
+js/registry.js          Exercises registry table (loads first)
+js/ex04-grating.js      EX04 PAUT grating / side-lobes   (self-registers)
+js/ex06-immersion.js    Module 5 immersion (EX06)        (self-registers)
+js/ex05-maze.js         EX05 corrosion C-scan maze       (self-registers)
+js/core.js              shared pulse-echo engine + EX01/02/03 + dispatcher + init (loads last)
+```
+Load model is registry-first / init-last, so the ex modules carry no load-time dependency on
+core; each only defines its functions and calls `Exercises.register(...)`, which core resolves
+at run time.
+
+### What changed structurally
+- **Dispatch is registry-driven** (Stage 2): `drawScan` / `drawAscan` / `setExercise` /
+  hamburger / nav no longer hard-code per-EX `if` branches — they look up the `Exercises`
+  registry. Contract: `drawScene · drawSceneOverlay · sceneGeometry · drawBeam ·
+  sceneOverlayLate · drawAscan · drawAscanOverlay · getSignal · onEnter · descHtml ·
+  btnId · activeClass · num · name · group`.
+- **EX04 / EX05 / EX06 peeled into own files** (Stage 3). EX01/02/03 stay in `core.js` —
+  they are the shared pulse-echo engine itself (shared `calculateBeamOcclusion` /
+  `drawStandardBeam` / drawScan skeleton / physics core), not independent modules.
+- **nav3 tabbed shell** (Stage 4): two tabs rendered from the registry `group` column —
+  Course Exercises (`core`) + Technique Modules (`m5` …). New groups auto-appear once a
+  module registers.
+- **Per-module GitHub ship flow** (Stage 5/6): `工具箱/ship_modular.ps1` commits one unit per
+  EX/Module + shell + docs; only changed modules commit on a version bump.
+
+### Rule-code audit (modular-aware)
+- The rule-tag audit now also pulls each external `<script src>` source via sync XHR (JS is no
+  longer inline in the DOM); pure `file://` viewers skip the source audit (PS harness backstops).
+
+### Touched files
+- `ut-scanner-modular/` (index.html + js/registry.js + js/core.js + js/ex04-grating.js +
+  js/ex05-maze.js + js/ex06-immersion.js) — all UTF-8 **BOM**.
+- `工具箱/ship_modular.ps1` · `工具箱/smoke_check_modular.ps1` · `工具箱/verify_ex_render_modular.ps1`
+- `MODULAR_REFACTOR_PLAN.md` · `CLAUDE.md` (modular architecture note) · this entry.
+- `ut-scanner-v80.html` archived to `歷史版本與日報庫/各版本/` (frozen backup; monolith
+  pre-refactor backup already at `各版本/ut-scanner-v80-PRE-MODULAR-REFACTOR.html`).
+
+---
+
 ## v80 — 2026-06-04 EDT
 
 **Final beam/shadow render fix** (user directive "最終渲染修正 → 直接 Ship"). Targets the v79 review of EX1/2 + EX3. ruleCodes `BO-9,BO-10,BO-11`; node `--check` clean.

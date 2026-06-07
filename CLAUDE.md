@@ -1062,6 +1062,32 @@ TUTORIAL mode 時隱藏。狀態本地暫存，不寫入 localStorage（避免 c
 
 
 
+---
+
+## 模組化架構 / Modular Architecture（2026-06-07 EDT · Stage 6 收尾）
+
+單檔版 `ut-scanner-v80.html` 已**凍結為備份**(移入 `歷史版本與日報庫/各版本/`),不再修改;所有開發一律改 **modular 版** `今日工作區/ut-scanner-modular/`。功能與規則 §1–§264 完全等價,只是拆檔讓各 EX/Module 可獨立部署/審閱。
+
+**檔案 + 載入順序(registry-first / init-last):**
+- `index.html` — DOM + CSS 殼,依序 `<script src>` 載入下列檔
+- `js/registry.js` — `Exercises` 註冊表(**先載**)
+- `js/ex04-grating.js` / `js/ex06-immersion.js` / `js/ex05-maze.js` — 各 EX/Module,load 時**自註冊** `Exercises.register(...)`
+- `js/core.js` — 共用脈衝回波引擎 + EX01/02/03 + dispatcher + **尾端 init**(**最後載**)
+
+ex 檔在 core 前載、只定義函式 + 註冊(不呼叫 core),故無 load-time 依賴;core 執行期才解析這些 global。
+
+**Dispatch 全查表**(零 per-EX if 分支):`drawScan`/`drawAscan`/`setExercise`/hamburger/nav 一律查 `Exercises` 註冊表。契約欄:`drawScene · drawSceneOverlay · sceneGeometry · drawBeam · sceneOverlayLate · drawAscan · drawAscanOverlay · getSignal · onEnter · descHtml · btnId · activeClass · num · name · group`。
+
+**EX01/02/03 留 core**:三者是脈衝回波引擎本體(共用 `calculateBeamOcclusion`/`drawStandardBeam`/drawScan 骨架/物理核心),非獨立模組;EX04/05/06 才是真正可獨立部署的專門模組。
+
+**nav3 殼**(Stage 4):兩分頁由註冊表 `group` 欄渲染 —— 課程練習(`core`)/ 技術模組(`m5`…);新 group 一註冊就自動出現在對的分頁。
+
+**驗證網(modular)**:`工具箱/smoke_check_modular.ps1`(58/58)+ `工具箱/verify_ex_render_modular.ps1`;改 modular 後兩者須綠。rule-code audit 已改 modular-aware(額外 sync XHR 抓各 external `<script src>` 原始碼;純 file:// 端 skip,不假性 fail)。
+
+**GitHub 上傳**:`工具箱/ship_modular.ps1` —— 每 EX/Module 各一 commit + 殼(index/registry/core)+ docs;升版只 commit 實際改動的模組;`-Push` 才推到 `opa888jbbc/ut-scanner`(Public,永遠只留最新)。含中文的 .ps1/.html 須存 UTF-8 BOM。
+
+---
+
 遠端開發生產與「模糊歷史掃描」規範（加拿大時間基準）
 
 
