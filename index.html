@@ -277,6 +277,30 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .nav3-mod-group { display:flex; flex-direction:column; gap:6px; }
 .nav3-mod-label { font-size:10px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase; }
 .nav3-modules .ex-btn { flex-direction:row; justify-content:flex-start; gap:8px; max-width:280px; }
+/* ── Mobile overflow fixes (2026-06-08 EDT) ──────────────────────────────────────────
+   body{overflow-x:hidden} was silently CLIPPING two rows on phones (EX06 sub-mode chips
+   "Squirter" cut off; 課程練習 progress bar losing EX04/EX05). Research-backed fix:
+   wrap dense control groups; turn the >4-step progress bar into a sign-posted horizontal
+   scroll (natural partial-peek of the next step + right-edge fade) instead of clipping. */
+@media (max-width:640px) {
+  /* EX06 immersion + EX05 maze: each control group takes the full row (flex:1 1 100%)
+     so its label + buttons wrap inside the viewport, instead of staying one wide,
+     unbreakable flex item (which is why "Squirter" was being clipped). min-width:0 is
+     the key — without it a flex item's min-width:auto floors at its single-line content
+     size, so flex-basis never wins and the inner buttons never wrap. */
+  .immersion-controls .im-group,
+  .maze-controls .mz-group { flex-wrap:wrap; flex:1 1 100%; min-width:0; }
+  /* nav3 course progress: 5 steps can't fit a phone width → scroll, don't clip.
+     Each step sizes to content (overrides .ex-btn{flex:1}); the next step peeks at the
+     faded right edge to signpost that the row scrolls. */
+  .nav3-progress {
+    overflow-x:auto; flex-wrap:nowrap; scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-right:4px;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 20px),transparent);
+            mask-image:linear-gradient(90deg,#000 calc(100% - 20px),transparent); }
+  .nav3-progress::-webkit-scrollbar { display:none; }
+  .nav3-progress .ex-btn { flex:0 0 auto; min-width:62px; scroll-snap-align:start; }
+}
 /* v74 §238 M5-9 — Module 5 grouping divider before EX06+ */
 .ex-group-label { display:inline-flex; align-items:center; justify-content:center; padding:0 6px; margin:0 2px;
   font-size:7px; letter-spacing:1.4px; font-weight:600; color:rgba(30,144,255,0.65);
