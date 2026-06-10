@@ -985,8 +985,8 @@ body.alarm-pulse::before {
      groups (m5 = Module 5). Buttons keep the old btn-* ids + ex-btn classes (zero regression). -->
 <div class="nav3">
   <div class="nav3-tabs">
-    <button class="nav3-tab active" id="nav3-tab-course" onclick="switchNavTab('course')">📚 課程練習</button>
-    <button class="nav3-tab" id="nav3-tab-module" onclick="switchNavTab('module')">🔧 技術模組</button>
+    <button class="nav3-tab active" id="nav3-tab-course" onclick="switchNavTab('course')">📚 Course</button>
+    <button class="nav3-tab" id="nav3-tab-module" onclick="switchNavTab('module')">🔧 Techniques</button>
   </div>
   <div class="nav3-panel nav3-progress" id="nav3-course"></div>
   <div class="nav3-panel nav3-modules" id="nav3-module" style="display:none"></div>
@@ -7828,7 +7828,7 @@ Exercises.register('weld',        { num:'EX03', name:'Weld',        group:'core'
 // displayName/lesson kept as small local maps here (cosmetic) so the 3 ex0X.js files stay untouched.
 var NAV3_DISPLAY = { weld:'Weld Skew', grating:'Grating Lobes', maze:'🗺️ Maze', immersion:'💧 Immersion' };
 var NAV3_LESSON  = { penetration:true, grating:true };
-var NAV3_GROUP_LABEL = { m5:'Module 5 · 技術' };
+var NAV3_GROUP_LABEL = { m5:'Module 5 · Techniques' };
 function _nav3BtnHtml(d){
   var disp = NAV3_DISPLAY[d.id] || d.name;
   var chip = NAV3_LESSON[d.id] ? '<span class="lesson-chip" title="This exercise has a 5-step guided lesson">🎓</span>' : '';
