@@ -4637,7 +4637,7 @@ Exercises.register('weld',        { num:'EX03', name:'Weld',        group:'core'
 // displayName/lesson kept as small local maps here (cosmetic) so the 3 ex0X.js files stay untouched.
 var NAV3_DISPLAY = { weld:'Weld Skew', grating:'Grating Lobes', maze:'🗺️ Maze', immersion:'💧 Immersion' };
 var NAV3_LESSON  = { penetration:true, grating:true };
-var NAV3_GROUP_LABEL = { m5:'Module 5 · 技術' };
+var NAV3_GROUP_LABEL = { m5:'Module 5 · Techniques' };
 function _nav3BtnHtml(d){
   var disp = NAV3_DISPLAY[d.id] || d.name;
   var chip = NAV3_LESSON[d.id] ? '<span class="lesson-chip" title="This exercise has a 5-step guided lesson">🎓</span>' : '';
